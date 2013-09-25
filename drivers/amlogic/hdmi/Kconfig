@@ -9,4 +9,12 @@ config AML_HDMI_TX
         select AM_DISPLAY_MODULE
         help  
                 hdmi output enable,It should be enalbe if board have hdmi out interface
+                
+config AML_HDMI_TX_HDCP
+        bool "HDMI TX HDCP Enable"
+        depends on AML_HDMI_TX
+        default n
+        help  
+                hdmitx hdcp enable,It should be enalbe if board have hdmitx hdcp key
+
 endmenu

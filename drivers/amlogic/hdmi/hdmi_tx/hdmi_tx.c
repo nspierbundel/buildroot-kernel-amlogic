@@ -302,9 +302,12 @@ static  int  set_disp_mode(const char *mode)
     hdmitx_device.cur_VIC = HDMI_Unkown;
     ret = hdmitx_set_display(&hdmitx_device, vic);
     if(ret>=0){
-        hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AVMUTE_CNTL, AVMUTE_CLEAR);
-        if(hdmi_hdcp_status == 1)       // this means before action, hdcp fuction is needed
-            hdmi_hdcp_reset = 1;
+#ifdef CONFIG_AML_HDMI_TX_HDCP
+	    msleep(HDMI_HDCP_DELAYTIME_AFTER_DISPLAY);     // After HDMI display on, wait some time then enable HDCP
+	    hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AVMUTE_CNTL, AVMUTE_CLEAR);
+	    if(hdmi_hdcp_status == 1)       // this means before action, hdcp fuction is needed
+		hdmi_hdcp_reset = 1;
+#endif
         hdmitx_device.cur_VIC = vic;
         hdmitx_device.audio_param_update_flag = 1;
         hdmi_authenticated = -1;
@@ -376,9 +379,11 @@ static int set_disp_mode_auto(void)
     hdmitx_device.cur_VIC = HDMI_Unkown;
     ret = hdmitx_set_display(&hdmitx_device, vic); //if vic is HDMI_Unkown, hdmitx_set_display will disable HDMI
     if(ret>=0){
-        hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AVMUTE_CNTL, AVMUTE_CLEAR);
-        if(hdmi_hdcp_status == 1)       // this means before action, hdcp fuction is needed
-            hdmi_hdcp_reset = 1;
+#ifdef CONFIG_AML_HDMI_TX_HDCP
+	    hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AVMUTE_CNTL, AVMUTE_CLEAR);
+	    if(hdmi_hdcp_status == 1)       // this means before action, hdcp fuction is needed
+		hdmi_hdcp_reset = 1;
+#endif
         hdmitx_device.cur_VIC = vic;
         hdmitx_device.audio_param_update_flag = 1;
         hdmi_authenticated = -1;
@@ -621,12 +626,14 @@ static ssize_t store_config(struct device * dev, struct device_attribute *attr, 
         }
     }
     else if(strncmp(buf, "audio", 5)==0){
+#ifdef CONFIG_AML_HDMI_TX_HDCP
         if(buf[5] == '0') {
             hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AUDIO_CNTL, AUDIO_OFF);
         }
         else if(buf[5] == '1') {
             hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AUDIO_CNTL, AUDIO_ON); 
         }
+#endif
     }
     return 16;    
 }
@@ -706,16 +713,19 @@ static ssize_t show_disp_cap_3d(struct device * dev, struct device_attribute *at
 
 static ssize_t show_hdcp_ksv_info(struct device * dev, struct device_attribute *attr, char * buf)
 {
+#ifdef CONFIG_AML_HDMI_TX_HDCP
     int pos = 0, i;
     char aksv_buf[5];
     char bksv_buf[5];
 
     hdmi_hdcp_get_aksv(aksv_buf, 0);
     hdmi_hdcp_get_bksv(bksv_buf, 0);
+
     pos+=snprintf(buf+pos, PAGE_SIZE, "AKSV: ");
     for(i = 0;i < 5; i++) {
         pos+=snprintf(buf+pos, PAGE_SIZE, "%02x", aksv_buf[i]);
     }
+
     pos+=snprintf(buf+pos, PAGE_SIZE, "  %s\r\n", hdcp_ksv_valid(aksv_buf) ? "Valid" : "Invalid");
 
     pos+=snprintf(buf+pos, PAGE_SIZE, "BKSV: ");
@@ -725,6 +735,9 @@ static ssize_t show_hdcp_ksv_info(struct device * dev, struct device_attribute *
     pos+=snprintf(buf+pos, PAGE_SIZE, "  %s\r\n", hdcp_ksv_valid(bksv_buf) ? "Valid" : "Invalid");
 
     return pos;
+#else
+    return 0;
+#endif
 }
 
 static ssize_t show_hpd_state(struct device * dev, struct device_attribute *attr, char * buf)
@@ -1275,11 +1288,15 @@ hdmi_task_handle(void *data)
         }
         if(hdmitx_device->hpd_event == 2)
         {
+#ifdef CONFIG_AML_HDMI_TX_HDCP
             if(hdmi_hdcp_status == 1){
                 hdmi_hdcp_reset = 1;
             }
+#endif
             if(hdmitx_device->HWOp.Cntl){
+#ifdef CONFIG_AML_HDMI_TX_HDCP
                 hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_HDCP_CNTL, HDCP_OFF);
+#endif
                 hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_TMDS_PHY_CNTL, PHY_OFF);
                 hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_IP_SW_RST, TX_SYS_SW_RST);
             }
@@ -1295,19 +1312,22 @@ hdmi_task_handle(void *data)
             }
             hdmitx_device->cur_VIC = HDMI_Unkown;
             hdmi_authenticated = -1;
-			switch_set_state(&sdev, 0);
+	    switch_set_state(&sdev, 0);
             if(hdmitx_device->hpd_event == 2)
                 hdmitx_device->hpd_event = 0;
             hdmitx_device->hpd_state = 0;
             hdmitx_device->vic_count = 0;
+#ifdef CONFIG_AML_HDMI_TX_HDCP
             if(hdmi_hdcp_status == 1){
                 hdmi_hdcp_reset = 1;
             }
+#endif
             switch_set_state(&hdcp_dev, 0);
         }    
         else{
         }
         /* authentication process */
+#ifdef CONFIG_AML_HDMI_TX_HDCP
         if((hdmitx_device->cur_VIC != HDMI_Unkown) && (hdmitx_device->hpd_state == 1)){
             if(hdmitx_device->auth_process_timer>0){
                 if(hdmitx_device->auth_process_timer == 60)
@@ -1352,6 +1372,7 @@ hdmi_task_handle(void *data)
             hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_OUTPUT_ENABLE, 1);
             hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_AUDIO_CNTL, 1);
         }
+#endif
         /**/    
 next:
         if(hdmitx_device->HWOp.Cntl(hdmitx_device, IS_HDCP_ON, 0)) {
