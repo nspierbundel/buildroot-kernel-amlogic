@@ -1598,10 +1598,11 @@ static int amhdmitx_probe(struct platform_device *pdev)
         hdmitx_device.mux_hpd_if_pin_high_flag=1;
     }
     hdmitx_device.audio_param_update_flag=0;
+
     cdev_init(&(hdmitx_device.cdev), &amhdmitx_fops);
     hdmitx_device.cdev.owner = THIS_MODULE;
     cdev_add(&(hdmitx_device.cdev), hdmitx_id, HDMI_TX_COUNT);
-
+    
     //hdmitx_dev = device_create(hdmitx_class, NULL, hdmitx_id, "amhdmitx%d", 0);
     hdmitx_dev = device_create(hdmitx_class, NULL, hdmitx_id, NULL, "amhdmitx%d", 0); //kernel>=2.6.27 
 
@@ -1618,7 +1619,7 @@ static int amhdmitx_probe(struct platform_device *pdev)
     ret=device_create_file(hdmitx_dev, &dev_attr_cec);
     ret=device_create_file(hdmitx_dev, &dev_attr_cec_config);
     ret=device_create_file(hdmitx_dev, &dev_attr_cec_lang_config);
-    
+
     if (hdmitx_dev == NULL) {
         pr_error("device_create create error\n");
         class_destroy(hdmitx_class);

@@ -888,11 +888,11 @@ void unregister_cec_tx_msg(cec_tx_message_list_t* cec_tx_message_list)
 void cec_hw_reset(void)
 {
     unsigned char index = cec_global_info.my_node_index;
-#ifdef CONFIG_ARCH_MESON6
+//#ifdef CONFIG_ARCH_MESON6
     aml_write_reg32(APB_REG_ADDR(HDMI_CNTL_PORT), aml_read_reg32(APB_REG_ADDR(HDMI_CNTL_PORT))|(1<<16));
-#else 
-    WRITE_APB_REG(HDMI_CNTL_PORT, READ_APB_REG(HDMI_CNTL_PORT)|(1<<16));
-#endif
+//#else 
+//    WRITE_APB_REG(HDMI_CNTL_PORT, READ_APB_REG(HDMI_CNTL_PORT)|(1<<16));
+//#endif
     hdmi_wr_reg(OTHER_BASE_ADDR+HDMI_OTHER_CTRL0, 0xc); //[3]cec_creg_sw_rst [2]cec_sys_sw_rst
     hdmi_wr_reg(CEC0_BASE_ADDR+CEC_TX_CLEAR_BUF, 0x1);
     hdmi_wr_reg(CEC0_BASE_ADDR+CEC_RX_CLEAR_BUF, 0x1);
@@ -906,11 +906,11 @@ void cec_hw_reset(void)
     hdmi_wr_reg(CEC0_BASE_ADDR+CEC_RX_CLEAR_BUF, 0x0);
     hdmi_wr_reg(OTHER_BASE_ADDR+HDMI_OTHER_CTRL0, 0x0);
 //    WRITE_APB_REG(HDMI_CNTL_PORT, READ_APB_REG(HDMI_CNTL_PORT)&(~(1<<16)));
-#ifdef CONFIG_ARCH_MESON6
+//#ifdef CONFIG_ARCH_MESON6
     aml_write_reg32(APB_REG_ADDR(HDMI_CNTL_PORT), aml_read_reg32(APB_REG_ADDR(HDMI_CNTL_PORT))&(~(1<<16)));
-#else
-    WRITE_APB_REG(HDMI_CNTL_PORT, READ_APB_REG(HDMI_CNTL_PORT)&(~(1<<16)));
-#endif
+//#else
+//    WRITE_APB_REG(HDMI_CNTL_PORT, READ_APB_REG(HDMI_CNTL_PORT)&(~(1<<16)));
+//#endif
     hdmi_wr_reg(CEC0_BASE_ADDR+CEC_CLOCK_DIV_H, 0x00 );
     hdmi_wr_reg(CEC0_BASE_ADDR+CEC_CLOCK_DIV_L, 0xf0 );
 
