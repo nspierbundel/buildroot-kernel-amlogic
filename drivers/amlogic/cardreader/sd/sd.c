@@ -19,6 +19,10 @@
 #include <linux/cardreader/card_block.h>
 #include <linux/cardreader/cardreader.h>
 #include <linux/cardreader/sdio.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 
 #include "sd_misc.h"
 #include "sd_protocol.h"

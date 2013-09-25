@@ -3,6 +3,9 @@
 #include "efuse_regs.h"
 #include <linux/efuse.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
 
 /**
  * efuse version 0.1 (for M3 ) 

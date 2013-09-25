@@ -38,6 +38,11 @@
 
 #include <asm/uaccess.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
+
 #include "vdec_reg.h"
 #include "vreal.h"
 #include "amvdec.h"

@@ -22,6 +22,10 @@
 #ifndef ESPARSER_H
 #define ESPARSER_H
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 extern s32 esparser_init(struct stream_buf_s *buf);
 
 extern void esparser_release(struct stream_buf_s *buf);

@@ -45,6 +45,10 @@
 #include <linux/aml_common.h>
 #include <mach/irqs.h>
 #include <mach/mod_gate.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#include <mach/cpu.h>
+#endif
 /* Local Headers */
 #include "../tvin_global.h"
 #include "../tvin_format_table.h"

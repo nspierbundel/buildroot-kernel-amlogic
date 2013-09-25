@@ -45,6 +45,11 @@
 #include <linux/slab.h>
 #include <asm/uaccess.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#include <mach/cpu.h>
+#endif
+
 #include "plat/remote.h"
 #include "am_remote.h"
 

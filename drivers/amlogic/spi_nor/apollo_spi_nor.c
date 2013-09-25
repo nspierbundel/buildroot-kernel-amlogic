@@ -16,6 +16,10 @@
 #include <mach/spi_nor.h>
 #include <mach/pinmux.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 struct amlogic_spi_user_crtl {
 	unsigned char	user_def_cmd;
 	unsigned char	cmd_have_addr;

@@ -36,6 +36,11 @@
 #include <mach/mod_gate.h>
 #include <linux/vout/enc_clk_config.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#include <mach/cpu.h>
+#endif
+
 static u32 curr_vdac_setting=DEFAULT_VDAC_SEQUENCE;
 
 #define  SET_VDAC(index,val)   (aml_write_reg32(CBUS_REG_ADDR(index+VENC_VDAC_DACSEL0),val))

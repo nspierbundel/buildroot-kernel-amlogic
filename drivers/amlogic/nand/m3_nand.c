@@ -22,6 +22,10 @@
 #include <mach/clock.h>
 #include "version.h"
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 #ifdef CONFIG_SPI_NAND_COMPATIBLE
 		#define BOOT_DEVICE_FLAG  READ_CBUS_REG(ASSIST_POR_CONFIG)
 #endif

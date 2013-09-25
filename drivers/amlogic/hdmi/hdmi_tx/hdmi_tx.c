@@ -16,6 +16,10 @@
  */
 #define HDMI_DEBUG()  printk("HDMI DEBUG: %s [%d]\n", __FUNCTION__, __LINE__)
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 #ifndef AVOS
 
 

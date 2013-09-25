@@ -1,6 +1,10 @@
 #ifndef _DI_H
 #define _DI_H
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #undef USE_LIST
 #if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
 #define NEW_KEEP_LAST_FRAME

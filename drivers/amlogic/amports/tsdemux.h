@@ -22,6 +22,10 @@
 #ifndef TSDEMUX_H
 #define TSDEMUX_H
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
 // TODO: move to register headers
 #define NEW_PDTS_READY             4

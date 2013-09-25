@@ -36,6 +36,11 @@
 #include <mach/gpio_data.h>
 #include <mach/panel.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#include <mach/cpu.h>
+#endif
+
 extern unsigned int clk_util_clk_msr(unsigned int clk_mux);
 
 static struct class *aml_lcd_clsp;

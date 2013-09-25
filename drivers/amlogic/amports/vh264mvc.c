@@ -33,6 +33,10 @@
 #include <linux/dma-mapping.h>
 #include <asm/atomic.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #include <mach/am_regs.h>
 #include "vdec_reg.h"
 

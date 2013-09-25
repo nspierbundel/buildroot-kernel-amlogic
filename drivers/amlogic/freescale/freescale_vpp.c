@@ -35,6 +35,10 @@
 #define ASS_POOL_SIZE 1
 #endif
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 //#define DDD
 #define RECEIVER_NAME "freescale"
 #define PROVIDER_NAME "freescale"

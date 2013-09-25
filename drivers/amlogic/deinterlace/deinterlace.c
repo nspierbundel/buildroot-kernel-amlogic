@@ -42,6 +42,10 @@
 #include <asm/uaccess.h>
 #include <mach/am_regs.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #include <linux/osd/osd_dev.h>
 #include <linux/amports/vframe.h>
 #include <linux/amports/vframe_provider.h>

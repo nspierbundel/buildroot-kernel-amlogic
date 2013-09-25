@@ -17,6 +17,9 @@
 
 
 #include <linux/amports/vframe.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
 
 #include "vdin_drv.h"
 

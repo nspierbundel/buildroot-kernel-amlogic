@@ -22,6 +22,10 @@
 #ifndef RMPARSER_H
 #define RMPARSER_H
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 extern void rm_set_vasid(u32 vid, u32 aid);
 
 extern ssize_t rmparser_write(struct file *file,

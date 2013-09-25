@@ -50,6 +50,10 @@
 
 #include <mach/gpio.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 #ifdef CONFIG_ARCH_MESON
 #include "m1/hdmi_tx_reg.h"
 #endif

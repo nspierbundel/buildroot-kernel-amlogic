@@ -12,6 +12,10 @@
 #include <linux/efuse.h>
 #include "efuse_regs.h"
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 
 static void __efuse_write_byte( unsigned long addr, unsigned long data );
 static void __efuse_read_dword( unsigned long addr, unsigned long *data);

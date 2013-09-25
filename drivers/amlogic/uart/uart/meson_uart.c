@@ -39,6 +39,9 @@
 
 #include <asm/io.h>
 #include <asm/irq.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
 
 #include "meson_uart.h"
 

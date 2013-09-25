@@ -39,6 +39,10 @@
 #include <linux/amports/vframe_receiver.h>
 #include "osd_hw_def.h"
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 #ifdef CONFIG_AML_VSYNC_FIQ_ENABLE
 #define  FIQ_VSYNC
 #endif

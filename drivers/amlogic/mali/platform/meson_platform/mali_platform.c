@@ -128,6 +128,16 @@ static DEFINE_SPINLOCK(lock);
 static struct clk *mali_clk = NULL;
 
 //static int mali_revb_flag = -1;
+#ifndef CONFIG_ARCH_MESON6
+int mali_revb_flag = 1;
+
+int mali_meson_is_revb(void)
+{
+    printk("Board is not M6, will try driver.\n");
+    
+    return mali_revb_flag;
+}
+#else
 extern int mali_revb_flag;
 int mali_meson_is_revb(void)
 {
@@ -139,7 +149,7 @@ int mali_meson_is_revb(void)
     
     return mali_revb_flag;
 }
-
+#endif
 static void mali_meson_poweron(int first_poweron)
 {
 	unsigned long flags;

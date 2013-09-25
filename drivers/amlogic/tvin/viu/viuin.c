@@ -34,6 +34,9 @@
 #include <linux/tvin/tvin_v4l2.h>
 #include <mach/am_regs.h>
 #include <linux/vout/lcdoutc.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
 
 #include "../tvin_global.h"
 #include "../tvin_frontend.h"

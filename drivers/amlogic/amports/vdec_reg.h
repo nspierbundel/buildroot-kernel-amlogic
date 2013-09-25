@@ -20,6 +20,10 @@
 #ifndef VDEC_REG_H
 #define VDEC_REG_H
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
 #define READ_VREG(r) (__raw_readl(DOS_REG_ADDR(r)))
 #define WRITE_VREG(r, val) __raw_writel(val, DOS_REG_ADDR(r))

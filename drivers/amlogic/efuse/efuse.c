@@ -25,6 +25,10 @@
 #include <linux/efuse.h>
 #include "efuse_regs.h"
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #define EFUSE_MODULE_NAME   "efuse"
 #define EFUSE_DRIVER_NAME		"efuse"
 #define EFUSE_DEVICE_NAME   "efuse"

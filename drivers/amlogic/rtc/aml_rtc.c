@@ -8,9 +8,12 @@
 #include<linux/slab.h>
 #include<asm/delay.h>
 #include<mach/am_regs.h>
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-#include <plat/io.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
 #endif
+
+#include <plat/io.h>
+
 
 int c_dbg_lvl = 0;
 #define RTC_DBG(lvl, x...) do{ if(c_dbg_lvl & lvl) printk(x);} while(0)

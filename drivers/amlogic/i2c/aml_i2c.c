@@ -17,6 +17,10 @@
 
 #include <mach/am_regs.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #include "aml_i2c.h"
 
 static int no_stop_flag = 0;

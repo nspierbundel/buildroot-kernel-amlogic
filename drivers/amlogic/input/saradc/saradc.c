@@ -9,6 +9,11 @@
 #ifdef CONFIG_MESON_CPU_TEMP_SENSOR
 #include <mach/cpu.h>
 #endif
+
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 //#define ENABLE_CALIBRATION
 
 struct saradc {

@@ -29,6 +29,10 @@
 #include <linux/fs.h>
 #include <mach/watchdog.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 static struct platform_device *pdev;
 static aml_watchdog_t* boot_monitor_watchdog = NULL;
 

@@ -25,6 +25,10 @@
 #include <linux/platform_device.h>
 #include <linux/amports/vformat.h>
 #include <mach/am_regs.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
 #include <mach/mod_gate.h>
 #endif

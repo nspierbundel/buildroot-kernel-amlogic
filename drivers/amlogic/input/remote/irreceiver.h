@@ -1,6 +1,9 @@
 #ifndef IRRECEIVER_H
 #define IRRECEIVER_H
 #include <plat/remote.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
 /***********************************************************************
  * System timer
  **********************************************************************/

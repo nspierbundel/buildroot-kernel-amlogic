@@ -34,6 +34,10 @@
 #include <linux/amports/vframe_provider.h>
 #include <linux/amports/vframe_receiver.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #include "vdec_reg.h"
 
 #ifdef CONFIG_AM_VDEC_MJPEG_LOG

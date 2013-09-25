@@ -61,6 +61,11 @@
 #include <asm/uaccess.h>
 #include <linux/input/key_input.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#include <mach/cpu.h>
+#endif
+
 #if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
 #include <plat/io.h>
 #endif

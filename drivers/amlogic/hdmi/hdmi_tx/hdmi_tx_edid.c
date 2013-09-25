@@ -1,3 +1,7 @@
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 #ifndef AVOS
 #include <linux/version.h>
 #include <linux/module.h>

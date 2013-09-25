@@ -40,6 +40,11 @@
 #include <linux/amports/timestamp.h>
 #include <linux/kernel.h>
 #include <linux/tvin/tvin_v4l2.h>
+
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
 #include <mach/mod_gate.h>
 #endif

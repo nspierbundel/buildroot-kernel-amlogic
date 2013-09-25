@@ -41,6 +41,9 @@
 #else
 #include <mach/am_regs.h>
 #endif
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
 #if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
 #include <mach/mod_gate.h>
 #endif

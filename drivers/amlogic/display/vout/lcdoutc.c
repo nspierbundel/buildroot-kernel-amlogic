@@ -40,6 +40,12 @@
 #include <mach/am_regs.h>
 #include <linux/notifier.h>
 #include <linux/reboot.h>
+
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#include <mach/cpu.h>
+#endif
+
 extern unsigned int clk_util_clk_msr(unsigned int clk_mux);
 
 //M6 PLL control value 

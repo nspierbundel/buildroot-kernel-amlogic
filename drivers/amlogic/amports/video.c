@@ -61,6 +61,10 @@
 #include <asm/fiq.h>
 #include <asm/uaccess.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #include "videolog.h"
 
 #ifdef CONFIG_AM_VIDEO_LOG

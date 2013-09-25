@@ -1,4 +1,7 @@
 #include <linux/ge2d/ge2d.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
 
 static const  unsigned int filt_coef0[] =   //bicubic
 			{

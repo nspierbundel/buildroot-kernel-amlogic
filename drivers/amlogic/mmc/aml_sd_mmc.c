@@ -40,6 +40,10 @@
 #include <asm/outercache.h>
 #include <mach/power_gate.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 //#define dbg_print(a...) printk(a);
 #define dbg_print(a...) 
 //#define DBG_LINE_INFO()  printk(KERN_INFO "[%s] : %s\n",__func__,__FILE__);

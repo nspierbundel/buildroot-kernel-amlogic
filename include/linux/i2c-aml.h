@@ -6,6 +6,9 @@
 #include <mach/pinmux.h>
 #include <mach/am_regs.h>
 #include <mach/regs.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
 #if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON3
 #include <mach/ao_regs.h>
 #endif

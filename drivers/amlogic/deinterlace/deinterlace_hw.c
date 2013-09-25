@@ -3,6 +3,10 @@
 #include <linux/workqueue.h>
 #include <linux/platform_device.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #include <mach/am_regs.h>
 #include <linux/amports/canvas.h>
 #include <linux/amports/vframe.h>

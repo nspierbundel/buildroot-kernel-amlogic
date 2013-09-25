@@ -40,6 +40,9 @@
 #include <mach/pinmux.h>
 #include <mach/gpio.h>
 #include <asm/delay.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
 
 #include "am_net8218.h"
 

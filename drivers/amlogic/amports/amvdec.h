@@ -22,6 +22,10 @@
 #ifndef AMVDEC_H
 #define AMVDEC_H
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #define UCODE_ALIGN         8
 #define UCODE_ALIGN_MASK    7UL
 

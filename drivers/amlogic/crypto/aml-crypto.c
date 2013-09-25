@@ -18,6 +18,10 @@
 #include <asm/io.h>
 #include <asm/delay.h>
 #include <mach/am_regs.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 
 #include "aml-crypto.h"
 

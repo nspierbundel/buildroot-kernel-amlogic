@@ -41,6 +41,10 @@
 #include "vdec_reg.h"
 #include "amvdec.h"
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #define MC_SIZE (4096 * 4)
 
 #ifdef CONFIG_WAKELOCK

@@ -1,6 +1,10 @@
 #ifndef _DET3D_H
 #define _DET3D_H
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #if MESON_CPU_TYPE == MESON_CPU_TYPE_MESON6TV
 //***************************************************************************
 //******** DET3D REGISTERS ********

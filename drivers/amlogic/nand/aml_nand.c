@@ -23,6 +23,11 @@
 #include <linux/mtd/partitions.h>
 
 #include <mach/nand.h>
+
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 /*
  * CONFIG_SYS_NAND_RESET_CNT is used as a timeout mechanism when resetting
  * a flash.  NAND flash is initialized prior to interrupts so standard timers

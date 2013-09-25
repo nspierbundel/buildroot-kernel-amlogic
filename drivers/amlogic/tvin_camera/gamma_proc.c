@@ -44,6 +44,10 @@
 
 #include <linux/vout/vout_notify.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 #define DEVICE_NAME "gamma_proc"
 #define MODULE_NAME "gamma_proc"
 

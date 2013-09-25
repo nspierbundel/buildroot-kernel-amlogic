@@ -62,6 +62,10 @@
 //#include <linux/tvin/tvin_v4l2.h>
 //#endif
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #include "videolog.h"
 
 #ifdef CONFIG_AM_VIDEO_LOG

@@ -39,6 +39,10 @@
 
 #include <asm/uaccess.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 
 #include "amvdec.h"
 #include "jpegdec_mc.h"

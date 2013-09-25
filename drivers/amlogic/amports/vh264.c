@@ -37,6 +37,10 @@
 #include <asm/atomic.h>
 #include <plat/io.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #include "vdec_reg.h"
 #include "amvdec.h"
 #include "vh264_mc.h"

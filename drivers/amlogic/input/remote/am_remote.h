@@ -2,6 +2,9 @@
 #define _REMOTE_H
 #include <asm/ioctl.h>
 #include <plat/fiq_bridge.h>
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
 
 //remote config  ioctl  cmd
 #define   REMOTE_IOC_UNFCODE_CONFIG              _IOW_BAD('I',12,sizeof(short))

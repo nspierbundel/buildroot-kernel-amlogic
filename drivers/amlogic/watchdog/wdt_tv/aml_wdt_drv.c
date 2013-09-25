@@ -22,6 +22,10 @@
 #include <linux/timer.h>
 #include <mach/am_regs.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 #ifndef WATCHDOG_ENABLE_BIT
 #define WATCHDOG_ENABLE_BIT		(22)
 #endif

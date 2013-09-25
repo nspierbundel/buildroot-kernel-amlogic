@@ -40,6 +40,10 @@
 #include <linux/vout/vinfo.h>
 #include <linux/vout/enc_clk_config.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 #include "hdmi_info_global.h"
 #include "hdmi_tx_module.h"
 #include "hdmi_tx_compliance.h"

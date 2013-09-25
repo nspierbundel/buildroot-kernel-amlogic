@@ -17,7 +17,9 @@
 #include "streambuf_reg.h"
 #endif
 
-
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
 
 #if !defined(CONFIG_PREEMPT)
 #define CONFIG_AM_TIMESYNC_LOG

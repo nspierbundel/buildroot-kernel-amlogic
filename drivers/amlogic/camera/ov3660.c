@@ -46,6 +46,10 @@
 #include "common/vmapi.h"
 #include <mach/mod_gate.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #define OV3660_CAMERA_MODULE_NAME "ov3660"
 #define TEST_I2C   1
 

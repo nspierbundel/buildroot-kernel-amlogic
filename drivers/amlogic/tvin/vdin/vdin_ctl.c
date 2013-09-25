@@ -28,6 +28,10 @@
 #include "vdin_canvas.h"
 #include "../../amports/ve_regs.h"
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #define VDIN_MEAS_24M_1MS 24000
 /* black bar det enable/disable test */
 static int black_bar_enable = 0;

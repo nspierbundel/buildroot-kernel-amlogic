@@ -3,6 +3,11 @@ dsp_register.h
 */
 #ifndef DSP_REGISTER_H
 #define DSP_REGISTER_H
+
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 #include <linux/dma-mapping.h>
 
 #define SYS_MEM_START	0x80000000

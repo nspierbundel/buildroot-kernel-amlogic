@@ -22,6 +22,10 @@
 #ifndef PSPARSER_H
 #define PSPARSER_H
 
+#ifndef CONFIG_ARCH_MESON6
+#include <mach/cpu.h>
+#endif
+
 extern s32 psparser_init(u32 vid, u32 aid, u32 sid);
 
 extern void psparser_release(void);
