@@ -463,7 +463,7 @@ static struct flash_info spi_nor_data [] = {
 
 	/*MX25----*/
 	{ "mx25l1005c", 0xC22011, 64 * 1024, 2, SECT_4K, },
-#if defined(CONFIG_MACH_MESON6_REFG18_ATV103)
+#if defined(CONFIG_MACH_MESON6_REFG18_ATV103) || defined(CONFIG_MACH_MESON3_F16REF_ATV102)
 	{ "mx25l4006e", 0xC22013, 64 * 1024, 8, SECT_4K, },
 #else
 	{ "kh25l4005a", 0xC22013, 64 * 1024, 4, SECT_4K, },
