@@ -7,6 +7,10 @@
 #include <linux/mutex.h>
 #include <plat/fiq_bridge.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 static irqreturn_t root_handle_isr(int irq, void *handle)
 {
     bridge_item_t  *pitem;

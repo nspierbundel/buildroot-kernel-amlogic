@@ -42,6 +42,7 @@
 
 #ifndef CONFIG_ARCH_MESON6
 #include <plat/io.h>
+#include <mach/cpu.h>
 #endif
 
 #include "hdmi_info_global.h"
@@ -49,7 +50,11 @@
 #include "hdmi_tx_compliance.h"
 #include "hdmi_tx_cec.h"
 #include "hdmi_tx_hdcp.h"
+#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
 #include "m6/hdmi_tx_reg.h"
+#else
+#include "m3/hdmi_tx_reg.h"
+#endif
 
 // Note: 
 // set P_HHI_VID_PLL_CNTL as 0x43e, get better clock performance

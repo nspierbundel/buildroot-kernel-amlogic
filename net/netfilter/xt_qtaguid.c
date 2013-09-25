@@ -26,9 +26,10 @@
 #include <net/tcp.h>
 #include <net/udp.h>
 
-#if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
+//#if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
+#include <net/ipv6.h>
 #include <linux/netfilter_ipv6/ip6_tables.h>
-#endif
+//#endif
 
 #include <linux/netfilter/xt_socket.h>
 #include "xt_qtaguid_internal.h"

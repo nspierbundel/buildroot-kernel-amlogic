@@ -17,7 +17,11 @@
 #include <linux/mutex.h>
 #include <linux/cdev.h>
 #include <asm/uaccess.h>
+#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
 #include <mach/register.h>
+#else
+#include <mach/regs.h>
+#endif
 #include <plat/io.h>
 #include "m1/hdmi_tx_reg.h"
 #include <crypto/hash.h>

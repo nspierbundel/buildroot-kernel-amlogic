@@ -30,6 +30,10 @@
 #include <mach/am_regs.h>
 #include <mach/clock.h>
 
+#ifndef CONFIG_ARCH_MESON6
+#include <plat/io.h>
+#endif
+
 #include "mali_kernel_common.h"
 #include "mali_osk.h"
 #include "mali_platform.h"
