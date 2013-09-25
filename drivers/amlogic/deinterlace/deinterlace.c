@@ -5627,7 +5627,7 @@ const static struct file_operations di_fops = {
     .owner    = THIS_MODULE,
     .open     = di_open,
     .release  = di_release,
-#if MESON_CPU_TYPE < MESON_CPU_TYPE_MESON6
+#if MESON_CPU_TYPE < MESON_CPU_TYPE_MESON3
     .ioctl    = di_ioctl,
 #endif    
 };
@@ -5759,7 +5759,7 @@ static int di_probe(struct platform_device *pdev)
 #else
     Wr(A9_0_IRQ_IN1_INTR_MASK, Rd(A9_0_IRQ_IN1_INTR_MASK)|(1<<14));
 #endif    
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
+#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON3
     sema_init(&di_sema,1);
 #else
     init_MUTEX(&di_sema);
