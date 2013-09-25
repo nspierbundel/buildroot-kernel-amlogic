@@ -1,7 +1,3 @@
-#ifndef CONFIG_ARCH_MESON6
-#include <plat/io.h>
-#endif
-
 #ifndef AVOS
 #include <linux/version.h>
 #include <linux/module.h>
@@ -17,7 +13,7 @@
 #include <linux/mutex.h>
 #include <linux/cdev.h>
 #include <asm/uaccess.h>
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
+#ifdef CONFIG_ARCH_MESON6
 #include <mach/register.h>
 #else
 #include <mach/regs.h>

@@ -15,6 +15,10 @@
  *
  */
 
+#ifndef CONFIG_MACH_MESON6
+#include <plat/io.h>
+#endif
+
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -40,17 +44,12 @@
 #include <linux/vout/vinfo.h>
 #include <linux/vout/enc_clk_config.h>
 
-#ifndef CONFIG_ARCH_MESON6
-#include <plat/io.h>
-#include <mach/cpu.h>
-#endif
-
 #include "hdmi_info_global.h"
 #include "hdmi_tx_module.h"
 #include "hdmi_tx_compliance.h"
 #include "hdmi_tx_cec.h"
 #include "hdmi_tx_hdcp.h"
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
+#ifdef CONFIG_MACH_MESON6
 #include "m6/hdmi_tx_reg.h"
 #else
 #include "m3/hdmi_tx_reg.h"

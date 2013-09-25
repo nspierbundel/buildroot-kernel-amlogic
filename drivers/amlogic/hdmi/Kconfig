@@ -9,5 +9,4 @@ config AML_HDMI_TX
         select AM_DISPLAY_MODULE
         help  
                 hdmi output enable,It should be enalbe if board have hdmi out interface
-
 endmenu

@@ -155,12 +155,6 @@ static struct early_suspend hdmitx_early_suspend_handler = {
     /* unplug powerdown */
 #define INIT_FLAG_POWERDOWN      0x2
 
-// HDMI CEC Function Flag
-#define INIT_FLAG_CEC_FUNC         0x4
-#define CEC_ONE_TOUCH_PLAY         0x8
-#define CEC_ONE_TOUCH_STANDBY      0x10
-#define CEC_AUTO_POWERON_FROM_TV   0x20
-
 #define INIT_FLAG_NOT_LOAD 0x80
 #define HDMI_SINK_NO_EDID       // For sink no edid case. If HDMI CTS, undef HDMI_SINK_NO_EDID
 
@@ -235,7 +229,6 @@ return value: 1, vout; 2, vout2;
 {
     int vout_index = 1;
 #ifdef CONFIG_AM_TV_OUTPUT2
-    //const vinfo_t *info;
     if(force_vout_index){
         vout_index = force_vout_index;
     }
@@ -302,12 +295,9 @@ static  int  set_disp_mode(const char *mode)
     hdmitx_device.cur_VIC = HDMI_Unkown;
     ret = hdmitx_set_display(&hdmitx_device, vic);
     if(ret>=0){
-#ifdef CONFIG_AML_HDMI_TX_HDCP
-	    msleep(HDMI_HDCP_DELAYTIME_AFTER_DISPLAY);     // After HDMI display on, wait some time then enable HDCP
-	    hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AVMUTE_CNTL, AVMUTE_CLEAR);
-	    if(hdmi_hdcp_status == 1)       // this means before action, hdcp fuction is needed
-		hdmi_hdcp_reset = 1;
-#endif
+        hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AVMUTE_CNTL, AVMUTE_CLEAR);
+        if(hdmi_hdcp_status == 1)       // this means before action, hdcp fuction is needed
+            hdmi_hdcp_reset = 1;
         hdmitx_device.cur_VIC = vic;
         hdmitx_device.audio_param_update_flag = 1;
         hdmi_authenticated = -1;
@@ -379,11 +369,9 @@ static int set_disp_mode_auto(void)
     hdmitx_device.cur_VIC = HDMI_Unkown;
     ret = hdmitx_set_display(&hdmitx_device, vic); //if vic is HDMI_Unkown, hdmitx_set_display will disable HDMI
     if(ret>=0){
-#ifdef CONFIG_AML_HDMI_TX_HDCP
-	    hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AVMUTE_CNTL, AVMUTE_CLEAR);
-	    if(hdmi_hdcp_status == 1)       // this means before action, hdcp fuction is needed
-		hdmi_hdcp_reset = 1;
-#endif
+        hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AVMUTE_CNTL, AVMUTE_CLEAR);
+        if(hdmi_hdcp_status == 1)       // this means before action, hdcp fuction is needed
+            hdmi_hdcp_reset = 1;
         hdmitx_device.cur_VIC = vic;
         hdmitx_device.audio_param_update_flag = 1;
         hdmi_authenticated = -1;
@@ -626,14 +614,12 @@ static ssize_t store_config(struct device * dev, struct device_attribute *attr, 
         }
     }
     else if(strncmp(buf, "audio", 5)==0){
-#ifdef CONFIG_AML_HDMI_TX_HDCP
         if(buf[5] == '0') {
             hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AUDIO_CNTL, AUDIO_OFF);
         }
         else if(buf[5] == '1') {
             hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AUDIO_CNTL, AUDIO_ON); 
         }
-#endif
     }
     return 16;    
 }
@@ -683,7 +669,6 @@ static ssize_t show_disp_cap_3d(struct device * dev, struct device_attribute *at
     int i,pos=0;
     int j=0;
     char* disp_mode_t[]={"480i","480p","576i","576p","720p","1080i","1080p","720p50hz","1080i50hz","1080p50hz","1080p24hz",NULL};
-    //char* native_disp_mode = hdmitx_edid_get_native_VIC(&hdmitx_device);
     HDMI_Video_Codes_t vic;
 
     for(i=0; disp_mode_t[i]; i++){
@@ -713,19 +698,16 @@ static ssize_t show_disp_cap_3d(struct device * dev, struct device_attribute *at
 
 static ssize_t show_hdcp_ksv_info(struct device * dev, struct device_attribute *attr, char * buf)
 {
-#ifdef CONFIG_AML_HDMI_TX_HDCP
     int pos = 0, i;
     char aksv_buf[5];
     char bksv_buf[5];
 
     hdmi_hdcp_get_aksv(aksv_buf, 0);
     hdmi_hdcp_get_bksv(bksv_buf, 0);
-
     pos+=snprintf(buf+pos, PAGE_SIZE, "AKSV: ");
     for(i = 0;i < 5; i++) {
         pos+=snprintf(buf+pos, PAGE_SIZE, "%02x", aksv_buf[i]);
     }
-
     pos+=snprintf(buf+pos, PAGE_SIZE, "  %s\r\n", hdcp_ksv_valid(aksv_buf) ? "Valid" : "Invalid");
 
     pos+=snprintf(buf+pos, PAGE_SIZE, "BKSV: ");
@@ -735,9 +717,6 @@ static ssize_t show_hdcp_ksv_info(struct device * dev, struct device_attribute *
     pos+=snprintf(buf+pos, PAGE_SIZE, "  %s\r\n", hdcp_ksv_valid(bksv_buf) ? "Valid" : "Invalid");
 
     return pos;
-#else
-    return 0;
-#endif
 }
 
 static ssize_t show_hpd_state(struct device * dev, struct device_attribute *attr, char * buf)
@@ -1261,6 +1240,8 @@ hdmi_task_handle(void *data)
 #ifdef HDMI_SINK_NO_EDID
             msleep(500);
 #endif
+            hdmitx_device->hpd_state = 1;
+
             if(hdmitx_device->HWOp.GetEDIDData(hdmitx_device)){
                 hdmi_print(1,"HDMI: EDID Ready\n");
                 hdmitx_edid_clear(hdmitx_device);
@@ -1279,24 +1260,20 @@ hdmi_task_handle(void *data)
                 force_output_mode = 1;
                 set_disp_mode_auto();
                 switch_set_state(&sdev, 1);
-
+                printk("test:aml_read_reg32(P_AO_DEBUG_REG0)%x\n",aml_read_reg32(P_AO_DEBUG_REG0));
+                cec_node_init(hdmitx_device);
             }
 #endif
-            hdmitx_device->hpd_state = 1;
             if(hdmitx_device->hpd_event ==1)
                 hdmitx_device->hpd_event = 0;
         }
         if(hdmitx_device->hpd_event == 2)
         {
-#ifdef CONFIG_AML_HDMI_TX_HDCP
             if(hdmi_hdcp_status == 1){
                 hdmi_hdcp_reset = 1;
             }
-#endif
             if(hdmitx_device->HWOp.Cntl){
-#ifdef CONFIG_AML_HDMI_TX_HDCP
                 hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_HDCP_CNTL, HDCP_OFF);
-#endif
                 hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_TMDS_PHY_CNTL, PHY_OFF);
                 hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_IP_SW_RST, TX_SYS_SW_RST);
             }
@@ -1311,23 +1288,21 @@ hdmi_task_handle(void *data)
                 }
             }
             hdmitx_device->cur_VIC = HDMI_Unkown;
+            hdmitx_device->tv_cec_support = 0;
             hdmi_authenticated = -1;
-	    switch_set_state(&sdev, 0);
+			switch_set_state(&sdev, 0);
             if(hdmitx_device->hpd_event == 2)
                 hdmitx_device->hpd_event = 0;
             hdmitx_device->hpd_state = 0;
             hdmitx_device->vic_count = 0;
-#ifdef CONFIG_AML_HDMI_TX_HDCP
             if(hdmi_hdcp_status == 1){
                 hdmi_hdcp_reset = 1;
             }
-#endif
             switch_set_state(&hdcp_dev, 0);
         }    
         else{
         }
         /* authentication process */
-#ifdef CONFIG_AML_HDMI_TX_HDCP
         if((hdmitx_device->cur_VIC != HDMI_Unkown) && (hdmitx_device->hpd_state == 1)){
             if(hdmitx_device->auth_process_timer>0){
                 if(hdmitx_device->auth_process_timer == 60)
@@ -1372,7 +1347,6 @@ hdmi_task_handle(void *data)
             hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_OUTPUT_ENABLE, 1);
             hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_AUDIO_CNTL, 1);
         }
-#endif
         /**/    
 next:
         if(hdmitx_device->HWOp.Cntl(hdmitx_device, IS_HDCP_ON, 0)) {
@@ -1562,6 +1536,11 @@ const static struct file_operations amhdmitx_fops = {
 //    .ioctl    = amhdmitx_ioctl,
 };
 
+hdmitx_dev_t * get_hdmitx_device(void)
+{
+    return &hdmitx_device;
+}
+EXPORT_SYMBOL(get_hdmitx_device);
 
 static int amhdmitx_probe(struct platform_device *pdev)
 {
@@ -1586,6 +1565,7 @@ static int amhdmitx_probe(struct platform_device *pdev)
     hdmitx_device.vic_count=0;
     hdmitx_device.auth_process_timer=0;
     hdmitx_device.force_audio_flag=0;
+    hdmitx_device.tv_cec_support=0;
     
 #ifdef CONFIG_HAS_EARLYSUSPEND
     register_early_suspend(&hdmitx_early_suspend_handler);
@@ -1598,11 +1578,10 @@ static int amhdmitx_probe(struct platform_device *pdev)
         hdmitx_device.mux_hpd_if_pin_high_flag=1;
     }
     hdmitx_device.audio_param_update_flag=0;
-
     cdev_init(&(hdmitx_device.cdev), &amhdmitx_fops);
     hdmitx_device.cdev.owner = THIS_MODULE;
     cdev_add(&(hdmitx_device.cdev), hdmitx_id, HDMI_TX_COUNT);
-    
+
     //hdmitx_dev = device_create(hdmitx_class, NULL, hdmitx_id, "amhdmitx%d", 0);
     hdmitx_dev = device_create(hdmitx_class, NULL, hdmitx_id, NULL, "amhdmitx%d", 0); //kernel>=2.6.27 
 
@@ -1619,7 +1598,7 @@ static int amhdmitx_probe(struct platform_device *pdev)
     ret=device_create_file(hdmitx_dev, &dev_attr_cec);
     ret=device_create_file(hdmitx_dev, &dev_attr_cec_config);
     ret=device_create_file(hdmitx_dev, &dev_attr_cec_lang_config);
-
+    
     if (hdmitx_dev == NULL) {
         pr_error("device_create create error\n");
         class_destroy(hdmitx_class);
@@ -1854,7 +1833,6 @@ static  int __init hdmitx_boot_para_setup(char *s)
     char separator[]={' ',',',';',0x0};
     char *token;
     unsigned token_len, token_offset, offset=0;
-    unsigned long cec_flag;
     int size=strlen(s);
     
     HDMI_DEBUG();
@@ -1915,46 +1893,20 @@ static  int __init hdmitx_boot_para_setup(char *s)
                 hdmi_480p_force_clk = simple_strtoul(token+8,NULL,10);
                 printk("hdmi, set 480p mode clock as %dMHz always\n", hdmi_480p_force_clk);    
             }
-            else if(strncmp(token, "cec", 3)==0){
-                hdmi_cec_func_config |= INIT_FLAG_CEC_FUNC>>2;
-                aml_write_reg32(P_AO_DEBUG_REG0, aml_read_reg32(P_AO_DEBUG_REG0) | (hdmi_cec_func_config & 0xf));                
-                printk("hdmi: enable cec function\n");
-                
-                cec_flag = simple_strtoul(token+3,NULL,16);                   
-                if(((cec_flag >> 1) & 0x1) == 1){
-                    hdmi_cec_func_config |= CEC_ONE_TOUCH_PLAY>>2;
-                    aml_write_reg32(P_AO_DEBUG_REG0, aml_read_reg32(P_AO_DEBUG_REG0) | (hdmi_cec_func_config & 0xf));
-                    printk("hdmi: enable cec one touch play function\n");    
-                }else{
-                    hdmi_cec_func_config &= ~(CEC_ONE_TOUCH_PLAY>>2);
-                    aml_write_reg32(P_AO_DEBUG_REG0, aml_read_reg32(P_AO_DEBUG_REG0) & (~(hdmi_cec_func_config & 0xf)));
-                    printk("hdmi: disable cec one touch play function\n");                     
-                }            
-                if(((cec_flag >> 2) & 0x1) == 1){
-                    hdmi_cec_func_config |= CEC_ONE_TOUCH_STANDBY>>2;
-                    aml_write_reg32(P_AO_DEBUG_REG0, aml_read_reg32(P_AO_DEBUG_REG0) | (hdmi_cec_func_config & 0xf));
-                    printk("hdmi: enable cec one touch standby function\n");    
-                }else{
-                    hdmi_cec_func_config &= ~(CEC_ONE_TOUCH_STANDBY>>2);
-                    aml_write_reg32(P_AO_DEBUG_REG0, aml_read_reg32(P_AO_DEBUG_REG0) & (~(hdmi_cec_func_config & 0xf)));
-                    printk("hdmi: disable cec one touch standby function\n");                         
+            else if(strncmp(token, "cec", 3)==0) {
+                unsigned int list = simple_strtoul(token+3,NULL,16);
+                if((list >= 0) && (list <= 0xf)) {
+                    hdmitx_device.cec_func_config = list;
+                    aml_write_reg32(P_AO_DEBUG_REG0, hdmitx_device.cec_func_config);         // save cec function list to AO_REG
                 }
-                if(((cec_flag >> 3) & 0x1) == 1){
-                    hdmi_cec_func_config |= CEC_AUTO_POWERON_FROM_TV>>2;
-                    aml_write_reg32(P_AO_DEBUG_REG0, aml_read_reg32(P_AO_DEBUG_REG0) | (hdmi_cec_func_config & 0xf));
-                    printk("hdmi: enable cec auto power on form TV function\n");    
-                }else{
-                hdmi_cec_func_config &= ~(CEC_AUTO_POWERON_FROM_TV>>2);
-                aml_write_reg32(P_AO_DEBUG_REG0, aml_read_reg32(P_AO_DEBUG_REG0) & (~(hdmi_cec_func_config & 0xf)));
-                    printk("hdmi: disable cec auto power on form TV function\n");                     
-                }
-            }else{
-                hdmi_cec_func_config &= ~(INIT_FLAG_CEC_FUNC>>2);
-                aml_write_reg32(P_AO_DEBUG_REG0, aml_read_reg32(P_AO_DEBUG_REG0) & (~(hdmi_cec_func_config & 0xf)));
-                printk("hdmi: disable cec function\n");   
+                printk("CEC Function List: %s, %s, %s, %s\n", (hdmitx_device.cec_func_config & (1 << CEC_FUNC_MSAK)) ? "enable" : "disable",
+                                                              (hdmitx_device.cec_func_config & (1 << ONE_TOUCH_PLAY_MASK)) ? "one touch play" : "",
+                                                              (hdmitx_device.cec_func_config & (1 << ONE_TOUCH_STANDBY_MASK)) ? "one touch standby" : "",
+                                                              (hdmitx_device.cec_func_config & (1 << AUTO_POWER_ON_MASK)) ? "auto power by tv" : ""
+                      );
+                printk("HDMI aml_read_reg32(P_AO_DEBUG_REG0):0x%x\n",aml_read_reg32(P_AO_DEBUG_REG0));
+                printk("HDMI hdmi_cec_func_config:0x%x\n",hdmitx_device.cec_func_config);
             }
-               printk("HDMI aml_read_reg32(P_AO_DEBUG_REG0):0x%x\n",aml_read_reg32(P_AO_DEBUG_REG0));
-               printk("HDMI hdmi_cec_func_config:0x%x\n",hdmi_cec_func_config);                            
         }    
         offset=token_offset;
     }while(token);
