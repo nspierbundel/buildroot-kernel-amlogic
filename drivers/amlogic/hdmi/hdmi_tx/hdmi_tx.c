@@ -180,6 +180,10 @@ static int hdmi_480p_force_clk = 0; /* 200, 225, 250, 270 */
 int force_output_mode = 0;   // if 1, then output force without edid  if 0, the with edid
 #endif
 
+#ifndef CONFIG_ARCH_MESON6
+unsigned int uboot_vmode_flag = 0;
+#endif
+
 // For most cases, we don't use HDCP
 // If using HDCP, need add follow command in boot/init.rc and recovery/boot/init.rc
 // write /sys/module/hdmitx/parameters/hdmi_output_force 0
@@ -319,6 +323,7 @@ static  int  set_disp_mode(const char *mode)
     return ret;
 }
 
+#ifdef CONFIG_ARCH_MESON6
 static int set_disp_mode_auto(void)
 {
     int ret=-1;
@@ -390,7 +395,90 @@ static int set_disp_mode_auto(void)
         }
     }
     return ret;
-}    
+}
+#else
+static int set_disp_mode_auto(void)
+{
+    int ret=-1;
+#ifndef AVOS
+    const vinfo_t *info = hdmi_get_current_vinfo();
+#else
+    vinfo_t* info=&lvideo_info;
+#endif    
+    unsigned char mode[10];
+    HDMI_Video_Codes_t vic;     //Prevent warning
+    
+    if(info == NULL) {
+        printk("HDMITX: cann't get valid mode\n");
+        return -1;
+    }
+    else {
+        printk("HDMI: get current mode: %s\n", info->name);
+    }
+
+    hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_OUTPUT_ENABLE, 0);
+    hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AUDIO_CNTL, 0);
+// If info->name equals to cvbs, then set mode to I mode to hdmi
+    memset(mode, 0, 10);
+    if(strncmp(info->name, "480cvbs", 7) == 0) {
+        memcpy(mode, "480i", 4);
+    }
+    else if(strncmp(info->name, "576cvbs", 7) == 0) {
+        memcpy(mode, "576i", 4);
+    }
+    else {
+        memcpy(mode, info->name, strlen(info->name));
+    }
+
+    //msleep(500);
+#ifndef HDMI_SINK_NO_EDID
+    vic = hdmitx_edid_get_VIC(&hdmitx_device, mode, (hdmitx_device.disp_switch_config==DISP_SWITCH_FORCE)?1:0);
+#else
+    if(force_output_mode){
+        vic = hdmitx_get_VIC(&hdmitx_device, mode);
+    }
+    else{
+        vic = hdmitx_edid_get_VIC(&hdmitx_device, mode, (hdmitx_device.disp_switch_config==DISP_SWITCH_FORCE)?1:0);
+    }
+#endif
+    vic = hdmitx_edid_get_VIC(&hdmitx_device, mode, (hdmitx_device.disp_switch_config==DISP_SWITCH_FORCE)?1:0);
+    hdmitx_device.cur_VIC = HDMI_Unkown;
+
+    printk("HDMITX: uboot_vmode_flag = %d  vic = %d\n", uboot_vmode_flag, vic);
+    if(uboot_vmode_flag == vic){
+        printk("don\'t set same hdmi mode\n");
+        uboot_vmode_flag = 0;
+        hdmitx_device.audio_param_update_flag = 1;
+        hdmitx_device.cur_VIC = vic;
+        hdmi_authenticated = -1;
+        hdmitx_device.auth_process_timer = AUTH_PROCESS_TIME;
+        return;
+    }
+    ret = hdmitx_set_display(&hdmitx_device, vic); //if vic is HDMI_Unkown, hdmitx_set_display will disable HDMI
+    if(ret>=0){
+        hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_AVMUTE_CNTL, AVMUTE_CLEAR);
+        if(hdmi_hdcp_status == 1)       // this means before action, hdcp fuction is needed
+            hdmi_hdcp_reset = 1;
+        hdmitx_device.cur_VIC = vic;
+        hdmitx_device.audio_param_update_flag = 1;
+        hdmi_authenticated = -1;
+        hdmitx_device.auth_process_timer = AUTH_PROCESS_TIME;
+        hdmitx_device.internal_mode_change = 0;
+        set_test_mode();
+    }
+    if(hdmitx_device.cur_VIC == HDMI_Unkown){
+        if(hpdmode==2){
+            hdmitx_edid_clear(&hdmitx_device); /* edid will be read again when hpd is muxed and it is high */
+            hdmitx_device.mux_hpd_if_pin_high_flag = 0;
+        }
+        // If current display is NOT panel, needn't TURNOFF_HDMIHW
+        if(strncmp(mode, "panel", 5) == 0){
+            hdmitx_device.HWOp.Cntl(&hdmitx_device, HDMITX_HWCMD_TURNOFF_HDMIHW, (hpdmode==2)?1:0);    
+        }
+    }
+}
+#endif
+
 #if 0
 static unsigned int set_cec_code(const char * buf, size_t count)
 {
@@ -1907,7 +1995,13 @@ static  int __init hdmitx_boot_para_setup(char *s)
                 printk("HDMI aml_read_reg32(P_AO_DEBUG_REG0):0x%x\n",aml_read_reg32(P_AO_DEBUG_REG0));
                 printk("HDMI hdmi_cec_func_config:0x%x\n",hdmitx_device.cec_func_config);
             }
-        }    
+#ifndef CONFIG_ARCH_MESON6
+#define PAR_VMODE(a, mode)      \
+            else if(strncmp(token, a, strlen(a))==0){ \
+                uboot_vmode_flag = mode;    \
+            }
+#endif
+        }
         offset=token_offset;
     }while(token);
     return 0;
