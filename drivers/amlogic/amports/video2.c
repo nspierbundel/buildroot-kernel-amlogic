@@ -246,13 +246,13 @@ typedef struct {
 static video_pm_state_t pm_state;
 #endif
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
+//#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
 static DEFINE_MUTEX(video_module_mutex);
 static DEFINE_SPINLOCK(lock);
-#else
-static DEFINE_MUTEX(video_module_mutex);
-static spinlock_t lock = SPIN_LOCK_UNLOCKED;
-#endif
+//#else
+//static DEFINE_MUTEX(video_module_mutex);
+//static spinlock_t lock = SPIN_LOCK_UNLOCKED;
+//#endif
 
 static u32 frame_par_ready_to_set, frame_par_force_to_set;
 static u32 vpts_remainder;
@@ -1244,13 +1244,15 @@ static irqreturn_t vsync_isr(int irq, void *dev_id)
         }
 
 #if MESON_CPU_TYPE < MESON_CPU_TYPE_MESON6
+	unsigned int last_isr_enter_time = 0;
         if(READ_MPEG_REG(ISA_TIMERB)==0){
             WRITE_MPEG_REG(ISA_TIMER_MUX, (READ_MPEG_REG(ISA_TIMER_MUX)&(~(3<<TIMER_B_INPUT_BIT)))
                 |(TIMER_UNIT_1us<<TIMER_B_INPUT_BIT)|(1<<13)|(1<<17));
             WRITE_MPEG_REG(ISA_TIMERB, 0xffff);
             printk("Deinterlace: Init 100us TimerB\n");
         }
-        cur_timerb_value = (unsigned int)(0x10000-(READ_MPEG_REG(ISA_TIMERB)>>16));
+        int cur_timerb_value = (unsigned int)(0x10000-(READ_MPEG_REG(ISA_TIMERB)>>16));
+	int interval;
         if(cur_timerb_value > last_isr_enter_time){
             interval = cur_timerb_value-last_isr_enter_time;
         }
