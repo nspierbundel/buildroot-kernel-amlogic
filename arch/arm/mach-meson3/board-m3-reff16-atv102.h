@@ -89,16 +89,16 @@
 #define VM_ADDR_END         (VM_SIZE + VM_ADDR_START - 1)
 
 #if defined(CONFIG_AM_DEINTERLACE_SD_ONLY)
-#define DI_MEM_SIZE         (SZ_1M*3)
+#define DI_MEM_SIZE         (SZ_1M*6)
 #else
-#define DI_MEM_SIZE         (SZ_1M*15)
+#define DI_MEM_SIZE         (SZ_1M*30)
 #endif
 #define DI_ADDR_START       U_ALIGN(CODEC_ADDR_END)
 #define DI_ADDR_END         (DI_ADDR_START+DI_MEM_SIZE-1)
 
 #ifdef CONFIG_POST_PROCESS_MANAGER
 #ifdef CONFIG_POST_PROCESS_MANAGER_PPSCALER
-#define PPMGR_MEM_SIZE               1920 * 1088 * 22
+#define PPMGR_MEM_SIZE               1920 * 1088 * 18
 #else
 #define PPMGR_MEM_SIZE               1920 * 1088 * 15
 #endif
@@ -109,7 +109,7 @@
 #define PPMGR_ADDR_START	U_ALIGN(VDIN_ADDR_END)
 #define PPMGR_ADDR_END		(PPMGR_ADDR_START+PPMGR_MEM_SIZE-1)
 
-#define STREAMBUF_MEM_SIZE          (SZ_1M*10)
+#define STREAMBUF_MEM_SIZE          (SZ_1M*15)
 #define STREAMBUF_ADDR_START        U_ALIGN(PPMGR_ADDR_END)
 #define STREAMBUF_ADDR_END      (STREAMBUF_ADDR_START+STREAMBUF_MEM_SIZE-1)
 

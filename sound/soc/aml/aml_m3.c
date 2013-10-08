@@ -15,11 +15,12 @@
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
 #include <sound/jack.h>
+#include <sound/aml_platform.h>
 
 #include <asm/mach-types.h>
 #include <mach/hardware.h>
 #include <mach/gpio.h>
-#include <sound/aml_platform.h>
+
 #include "aml_dai.h"
 #include "aml_pcm.h"
 #include "aml_m3_codec.h"
@@ -27,8 +28,8 @@
 #define HP_DET 1
 
 
-static struct aml_audio_platform * audio_platform_data = NULL;
-
+static struct platform_device *aml_m3_snd_device;
+static struct platform_device *aml_m3_platform_device;
 #if HP_DET
 static struct snd_soc_jack hp_jack;
 
@@ -42,6 +43,9 @@ static struct snd_soc_jack_pin hp_jack_pins[] = {
 
 static struct timer_list timer;
 static int hp_detect_flag = 0;
+extern void mute_spk(struct snd_soc_codec* codec, int flag);
+extern void mute_headphone(struct snd_soc_codec* codec, int flag);
+extern int aml_m3_is_hp_pluged(void);
 static struct switch_dev sdev;
 #endif
 
@@ -49,8 +53,8 @@ static int aml_m3_hw_params(struct snd_pcm_substream *substream,
 	struct snd_pcm_hw_params *params)
 {
 		struct snd_soc_pcm_runtime *rtd = substream->private_data;
-		struct snd_soc_dai *codec_dai = rtd->codec_dai;
-		struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+		struct snd_soc_dai *codec_dai = rtd->dai->codec_dai;
+		struct snd_soc_dai *cpu_dai = rtd->dai->cpu_dai;
 		int ret;
 		// TODO
 #ifdef _AML_M3_HW_DEBUG_
@@ -76,7 +80,8 @@ static int aml_m3_set_bias_level(struct snd_soc_card *card,
 					enum snd_soc_bias_level level)
 {
     int ret = 0;
-    //struct snd_soc_codec *codec = card->dapm.codec;
+    struct snd_soc_codec *codec = card->codec;
+	struct aml_audio_platform* pplatform = aml_m3_platform_device->dev.platform_data;
     // TODO
 
 #ifdef _AML_M3_HW_DEBUG_
@@ -99,8 +104,7 @@ printk("***Entered %s:%s: %d\n", __FILE__,__func__, level);
 #if HP_DET
         del_timer(&timer);
         hp_detect_flag = 0xf0000000;        
-        if(audio_platform_data->mute_spk)
-          audio_platform_data->mute_spk(1);
+        mute_spk(codec,1);
 #endif
         break;
     };
@@ -144,35 +148,34 @@ extern void latch_(struct snd_soc_codec* codec);
 static void aml_m3_hp_detect_queue(struct work_struct* work)
 {
 	int level = 0x0;
-	u16 reg;
+	//u16 reg;
 	struct aml_m3_work_t* pwork = container_of(work,struct aml_m3_work_t, aml_m3_workqueue);
     struct snd_soc_codec* codec = (struct snd_soc_codec*)(pwork->data);
 
     //if ((aml_dai[1].ac97_pdata) && ((struct aml_m3_pdata *) (aml_dai[1].ac97_pdata))->is_hp_pluged)
         //level = ((struct aml_m3_pdata *) (aml_dai[1].ac97_pdata))->is_hp_pluged();
-    if(audio_platform_data->is_hp_pluged)
-    	level = audio_platform_data->is_hp_pluged();
+	level = aml_m3_is_hp_pluged();
 	//printk("level = %x, hp_detect_flag = %x\n", level, hp_detect_flag);
 
 	if(level == 0x1 && hp_detect_flag!= 0x1){ // HP
 		printk("Headphone pluged in\n");
 		snd_soc_jack_report(&hp_jack, SND_JACK_HEADSET, SND_JACK_HEADSET);
-		reg = snd_soc_read(codec, ADAC_MUTE_CTRL_REG1);
-		reg &= ~0xc0;
-		snd_soc_write(codec, ADAC_MUTE_CTRL_REG1, reg); //unmute HP
-        if(audio_platform_data->mute_spk)
-        	audio_platform_data->mute_spk(1);
+		//reg = snd_soc_read(codec, ADAC_MUTE_CTRL_REG1);
+		//reg &= ~0xc0;
+		//snd_soc_write(codec, ADAC_MUTE_CTRL_REG1, reg); //unmute HP
+		mute_headphone(codec, 0);  //unmute HP
+    	mute_spk(codec, 1);
     	latch_(codec);
 		hp_detect_flag = level;
 		switch_set_state(&sdev, 1);
 	}else if(level != hp_detect_flag){ // HDMI
 		printk("Headphone unpluged\n");
         snd_soc_jack_report(&hp_jack,0, SND_JACK_HEADSET);
-		reg = snd_soc_read(codec, ADAC_MUTE_CTRL_REG1);
-		reg |= 0xc0;
-		snd_soc_write(codec, ADAC_MUTE_CTRL_REG1, reg);//mute HP
-        if(audio_platform_data->mute_spk)
-    		audio_platform_data->mute_spk(0);
+		//reg = snd_soc_read(codec, ADAC_MUTE_CTRL_REG1);
+		//reg |= 0xc0;
+		//snd_soc_write(codec, ADAC_MUTE_CTRL_REG1, reg);//mute HP
+		mute_headphone(codec,1);   //mute HP
+		mute_spk(codec, 0);
 		latch_(codec);
 		hp_detect_flag = level;
 		switch_set_state(&sdev, 0);
@@ -189,22 +192,21 @@ static void aml_m3_hp_detect_timer(unsigned long data)
 
 #endif
 
-static int aml_m3_codec_init(struct snd_soc_pcm_runtime *runtime)
+static int aml_m3_codec_init(struct snd_soc_codec *codec)
 {
-    struct snd_soc_codec* codec = runtime->codec;
-    struct snd_soc_card *card = codec->card;
-  struct snd_soc_dapm_context* dapm = &codec->dapm;
+    struct snd_soc_card *card = codec->socdev->card;
+
 	int err;
 	printk("***Entered %s:%s:\n", __FILE__,__func__);
    
     //Add board specific DAPM widgets and routes
-    err = snd_soc_dapm_new_controls(&codec->dapm, aml_m3_dapm_widgets, ARRAY_SIZE(aml_m3_dapm_widgets));
+    err = snd_soc_dapm_new_controls(codec, aml_m3_dapm_widgets, ARRAY_SIZE(aml_m3_dapm_widgets));
     if(err){
         dev_warn(card->dev, "Failed to register DAPM widgets\n");
         return 0;
     }
 
-    err = snd_soc_dapm_add_routes(&codec->dapm, intercon,
+    err = snd_soc_dapm_add_routes(codec, intercon,
         ARRAY_SIZE(intercon));
     if(err){
         dev_warn(card->dev, "Failed to setup dapm widgets routine\n");
@@ -214,7 +216,7 @@ static int aml_m3_codec_init(struct snd_soc_pcm_runtime *runtime)
 #if HP_DET
         hp_detect_flag = 1; // If is_hp_pluged function is not registered in bsp, set speaker as default.
 
-    err = snd_soc_jack_new(codec, "hp_switch",
+    err = snd_soc_jack_new(card, "hp_switch",
         SND_JACK_HEADSET, &hp_jack);
     if(err){
         dev_warn(card->dev, "Failed to alloc resource for hook switch\n");
@@ -234,16 +236,16 @@ static int aml_m3_codec_init(struct snd_soc_pcm_runtime *runtime)
     INIT_WORK(&aml_m3_work.aml_m3_workqueue, aml_m3_hp_detect_queue);
 #endif
 
-    snd_soc_dapm_nc_pin(dapm,"LINPUT1");
-    snd_soc_dapm_nc_pin(dapm,"RINPUT1");
+    snd_soc_dapm_nc_pin(codec,"LINPUT1");
+    snd_soc_dapm_nc_pin(codec,"RINPUT1");
 
-    snd_soc_dapm_enable_pin(dapm, "Ext Spk");
-    snd_soc_dapm_disable_pin(dapm, "HP");
-    snd_soc_dapm_enable_pin(dapm, "MIC IN");
-    snd_soc_dapm_disable_pin(dapm, "HP MIC");
-    snd_soc_dapm_disable_pin(dapm, "FM IN");
+    snd_soc_dapm_enable_pin(codec, "Ext Spk");
+    snd_soc_dapm_disable_pin(codec, "HP");
+    snd_soc_dapm_enable_pin(codec, "MIC IN");
+    snd_soc_dapm_disable_pin(codec, "HP MIC");
+    snd_soc_dapm_disable_pin(codec, "FM IN");
 
-    snd_soc_dapm_sync(dapm);
+    snd_soc_dapm_sync(codec);
 	/**/
     return 0;
 }
@@ -252,23 +254,26 @@ static int aml_m3_codec_init(struct snd_soc_pcm_runtime *runtime)
 static struct snd_soc_dai_link aml_m3_dai = {
 	.name = "AML-M3",
 	.stream_name = "AML M3 PCM",
-	.codec_name = "aml_m3_codec",
-	.platform_name = "aml-audio",
-	.cpu_dai_name = "aml-dai0",
-	.codec_dai_name = "AML-M3",
+	.cpu_dai = &aml_dai[0],  //////
+	.codec_dai = &aml_m3_codec_dai,
 	.init = aml_m3_codec_init,
 	.ops = &aml_m3_ops,
+	.rate = 44100,
 };
 
 static struct snd_soc_card snd_soc_aml_m3 = {
 	.name = "AML-M3",
+	.platform = &aml_soc_platform,
 	.dai_link = &aml_m3_dai,
 	.num_links = 1,
 	.set_bias_level = aml_m3_set_bias_level,
 };
 
-static struct platform_device *aml_m3_snd_device;
-static struct platform_device *aml_m3_platform_device;
+static struct snd_soc_device aml_m3_snd_devdata = {
+	.card = &snd_soc_aml_m3,
+	.codec_dev = &soc_codec_dev_aml_m3,
+};
+
 static int aml_m3_audio_probe(struct platform_device *pdev)
 {
 		int ret;
@@ -280,11 +285,10 @@ printk("***Entered %s:%s\n", __FILE__,__func__);
 			printk(KERN_ERR "ASoC: Platform device allocation failed\n");
 			ret = -ENOMEM;
 		}
-
-		audio_platform_data = (struct aml_audio_platform*) pdev->dev.platform_data;
-
-		platform_set_drvdata(aml_m3_snd_device, &snd_soc_aml_m3);
-
+	
+		platform_set_drvdata(aml_m3_snd_device,&aml_m3_snd_devdata);
+		aml_m3_snd_devdata.dev = &aml_m3_snd_device->dev;
+	
 		ret = platform_device_add(aml_m3_snd_device);
 		if (ret) {
 			printk(KERN_ERR "ASoC: Platform device allocation failed\n");
@@ -293,6 +297,7 @@ printk("***Entered %s:%s\n", __FILE__,__func__);
 		
 		aml_m3_platform_device = platform_device_register_simple("aml_m3_codec",
 								-1, NULL, 0);
+		aml_m3_platform_device->dev.platform_data = pdev->dev.platform_data;
 #if HP_DET
 		sdev.name = "h2w";//for report headphone to android
 		ret = switch_dev_register(&sdev);
@@ -339,11 +344,8 @@ static void __exit aml_m3_exit(void)
 {
 		platform_driver_unregister(&aml_m3_audio_driver);
 }
-#ifdef CONFIG_DEFERRED_MODULE_INIT
-deferred_module_init(aml_m3_init);
-#else
+
 module_init(aml_m3_init);
-#endif
 module_exit(aml_m3_exit);
 
 /* Module information */

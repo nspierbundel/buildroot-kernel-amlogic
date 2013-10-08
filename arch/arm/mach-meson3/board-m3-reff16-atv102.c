@@ -75,6 +75,7 @@
 #ifdef CONFIG_SUSPEND
 #include <mach/pm.h>
 #endif
+#include <mach/vdac_switch.h>
 
 #ifdef CONFIG_CARDREADER
 #include <mach/card_io.h>
@@ -311,6 +312,73 @@ static struct platform_device ppmgr_device = {
 };
 #endif /* CONFIG_POST_PROCESS_MANAGER */
 
+#ifdef CONFIG_FREE_SCALE
+static struct resource freescale_resources[] = {
+    [0] = {
+        .start = FREESCALE_ADDR_START,
+        .end   = FREESCALE_ADDR_END,
+        .flags = IORESOURCE_MEM,
+    },
+};
+
+static struct platform_device freescale_device =
+{
+    .name           = "freescale",
+    .id             = 0,
+    .num_resources  = ARRAY_SIZE(freescale_resources),
+    .resource       = freescale_resources,
+};
+#endif
+
+#if defined(CONFIG_AM_DEINTERLACE) || defined (CONFIG_DEINTERLACE)
+static struct resource deinterlace_resources[] = {
+    [0] = {
+        .start =  DI_ADDR_START,
+        .end   = DI_ADDR_END,
+        .flags = IORESOURCE_MEM,
+    },
+};
+
+static struct platform_device deinterlace_device = {
+    .name       = "deinterlace",
+    .id         = 0,
+    .num_resources = ARRAY_SIZE(deinterlace_resources),
+    .resource      = deinterlace_resources,
+};
+#endif
+
+#if defined(CONFIG_TVIN_VDIN)
+static struct resource vdin_resources[] = {
+    [0] = {
+        .start =  VDIN_ADDR_START,  //pbufAddr
+        .end   = VDIN_ADDR_END,     //pbufAddr + size
+        .flags = IORESOURCE_MEM,
+    },
+    [1] = {
+        .start = VDIN_ADDR_START,
+        .end   = VDIN_ADDR_END,
+        .flags = IORESOURCE_MEM,
+    },
+    [2] = {
+        .start = INT_VDIN_VSYNC,
+        .end   = INT_VDIN_VSYNC,
+        .flags = IORESOURCE_IRQ,
+    },
+    [3] = {
+        .start = INT_VDIN_VSYNC,
+        .end   = INT_VDIN_VSYNC,
+        .flags = IORESOURCE_IRQ,
+    },
+};
+
+static struct platform_device vdin_device = {
+    .name       = "vdin",
+    .id         = -1,
+    .num_resources = ARRAY_SIZE(vdin_resources),
+    .resource      = vdin_resources,
+};
+#endif
+
 //*******************************************************
 //                i2c section
 //*******************************************************
@@ -402,17 +470,17 @@ static void __init setup_remote_device(void)
 #endif
 
 static struct resource meson_fb_resource[] = {
-	[0] = {
-		.start = OSD1_ADDR_START,
-		.end   = OSD1_ADDR_END,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.start = OSD2_ADDR_START,
-		.end   = OSD2_ADDR_END,
-		.flags = IORESOURCE_MEM,
-	},
-	
+    [0] = {
+        .start = OSD1_ADDR_START,
+        .end   = OSD1_ADDR_END,
+        .flags = IORESOURCE_MEM,
+    },
+    [1] = {
+        .start = OSD2_ADDR_START,
+        .end   = OSD2_ADDR_END,
+        .flags = IORESOURCE_MEM,
+    },
+
 };
 
 static struct resource meson_codec_resource[] = {
@@ -423,8 +491,8 @@ static struct resource meson_codec_resource[] = {
     },
     [1] = {
         .start = STREAMBUF_ADDR_START,
-	 .end = STREAMBUF_ADDR_END,
-	 .flags = IORESOURCE_MEM,
+        .end   = STREAMBUF_ADDR_END,
+        .flags = IORESOURCE_MEM,
     },
 };
 
@@ -569,47 +637,12 @@ static void aml_eth_reset(void)
 
 static void aml_eth_clock_enable(void)
 {
-	unsigned int n = 0;
-	unsigned int clk_invert = 0;
-/*
-	old 2.6 code -> eth_clk_set(ETH_CLKSRC_EXT_XTAL_CLK, (50 * CLK_1M), (50 * CLK_1M), 1);
-	
-	#define ETH_BANK0_GPIOY1_Y9     	0
-	#define ETH_CLK_IN_GPIOY0_REG6_18	0
-	#define ETH_BANK0_REG1          	6
-	#define PERIPHS_PIN_MUX_6  			0x 
-		
-	eth_clk_set(ETH_CLKSRC_EXT_XTAL_CLK, (50 * CLK_1M), (50 * CLK_1M), 1);
-	
-	N = (50 * CLK_1M) / (50 * CLK_1M) = 1
-	
-	               (n - 1) << 0 |
-                   selectclk << 9 |
-                   ((clk_invert == 1) ? 1 : 0) << 14 | //PAD signal invert
-                   1 << 8 //enable clk
-                  );
-	
-    bit
-    7..0: Clock Divider
-    8   : Clock Enable
-    13.9: Clock Source
-    14  : Clock Inverted
-		results as code below.
-	*/
-	
-    printk(KERN_INFO "****** aml_eth_clock_enable() ******\n");
-
-	/* A11: External Clock */
-	n = 1;
-	clk_invert = 1;
-	aml_write_reg32(P_HHI_ETH_CLK_CNTL, (
-		(n - 1) << 0 |  					// Clock Divider
-        0 << 9 | 		  					// Clock Source 0 = ETH_CLKSRC_XTAL_CLK
-        ((clk_invert == 1) ? 1 : 0) << 14 | // PAD signal invert
-        1 << 8 								// enable clk
-		)
-	);
-	printk("P_HHI_ETH_CLK_CNTL = 0x%x\n", aml_read_reg32(P_HHI_ETH_CLK_CNTL));
+   #ifdef CONFIG_AM_ETHERNET_EXT_CLK
+       eth_set_pinmux(ETH_BANK0_GPIOY1_Y9, ETH_CLK_IN_GPIOY0_REG6_18, 0);
+   #else
+       eth_set_pinmux(ETH_BANK0_GPIOY1_Y9, ETH_CLK_OUT_GPIOY0_REG6_17, 0);
+   #endif
+	//printk("P_HHI_ETH_CLK_CNTL = 0x%x\n", aml_read_reg32(P_HHI_ETH_CLK_CNTL));
 }
 
 static void aml_eth_clock_disable(void)
@@ -1252,6 +1285,40 @@ static struct platform_device aml_audio = {
 };
 #endif //CONFIG_SND_AML_M3
 
+#if  defined(CONFIG_AM_TV_OUTPUT)||defined(CONFIG_AM_TCON_OUTPUT)
+static struct resource vout_device_resources[] = {
+    [0] = {
+        .start = 0,
+        .end   = 0,
+        .flags = IORESOURCE_MEM,
+    },
+};
+
+static struct platform_device vout_device = {
+    .name       = "mesonvout",
+    .id         = 0,
+    .num_resources = ARRAY_SIZE(vout_device_resources),
+    .resource      = vout_device_resources,
+};
+#endif
+
+#if  defined(CONFIG_AM_TV_OUTPUT2)
+static struct resource vout2_device_resources[] = {
+    [0] = {
+        .start = 0,
+        .end   = 0,
+        .flags = IORESOURCE_MEM,
+    },
+};
+
+static struct platform_device vout2_device = {
+    .name       = "mesonvout2",
+    .id         = 0,
+    .num_resources = ARRAY_SIZE(vout2_device_resources),
+    .resource      = vout2_device_resources,
+};
+#endif
+
 #if defined(CONFIG_SUSPEND)
 typedef struct {
 	char name[32];
@@ -1308,18 +1375,18 @@ void m3ref_set_vccx2(int power_on)
 	// TODO: Add vccx2 enable
 
 	// HDMI Power +5V -- GPIO D6, ACTIVE HIGH
-	//gpio_direction_output( GPIO_PWR_HDMI, 0);
+	gpio_direction_output( GPIO_PWR_HDMI, 0);
 
 	// VCCx2 +5V -- GPIO AO6, ACTIVE HIGH.
 	gpio_direction_output( GPIO_PWR_VCCx2, 0);
 
 	// VCCIO +3V3 -- GPIO AO2, ACTIVE HIGH
-	gpio_direction_output( GPIO_PWR_VCCIO, 0);
+	//gpio_direction_output( GPIO_PWR_VCCIO, 0);
     }
 }
 
 #if defined (CONFIG_AML_HDMI_TX)
-static void m6ref_hdmi_5v_ctrl(unsigned int pwr)
+static void m3ref_hdmi_5v_ctrl(unsigned int pwr)
 {
     if(pwr){
         printk("HDMI 5V Power On\n");
@@ -1336,15 +1403,11 @@ static void m6ref_hdmi_5v_ctrl(unsigned int pwr)
 }
 
 static struct hdmi_phy_set_data brd_phy_data[] = {
-/*    {27, 0x16, 0x30},   // 480i/p 576i/p
-    {74, 0x16, 0x40},   // 720p 1080i
-    {148, 0x16, 0x40},  // 1080p
-*/
     {-1,   -1},         //end of phy setting
 };
 
 static struct hdmi_config_platform_data aml_hdmi_pdata = {
-    .hdmi_5v_ctrl = NULL, // m6ref_hdmi_5v_ctrl,
+    .hdmi_5v_ctrl = NULL, // m3ref_hdmi_5v_ctrl,
     .hdmi_3v3_ctrl = NULL,
     .hdmi_pll_vdd_ctrl = NULL,
     .phy_data = brd_phy_data,
@@ -1358,6 +1421,66 @@ static struct platform_device aml_hdmi_device = {
     }
 };
 #endif
+
+static void vdac_hw_switch(unsigned type)
+{
+	// the control logic is based on the g18 board.
+	switch( type )
+	{
+		case VOUT_CVBS:
+			// set YPBR_EN# to high
+			if((aml_read_reg32(P_PREG_PAD_GPIO2_O) & (1<<2)) == 0)
+				aml_set_reg32_mask(P_PREG_PAD_GPIO2_O,(1<<2));
+
+			// set CVBS_EN# to high
+			if((aml_read_reg32(P_PREG_PAD_GPIO2_O) & (1<<3)) == 0)
+				aml_set_reg32_mask(P_PREG_PAD_GPIO2_O,(1<<3));
+
+			break;
+		case VOUT_COMPONENT:
+			// set YPBR_EN# to low
+			if((aml_read_reg32(P_PREG_PAD_GPIO2_O) & (1<<2)) != 0)
+			    aml_clr_reg32_mask(P_PREG_PAD_GPIO2_O,(1<<2));
+
+			// set CVBS_EN# to low
+			if((aml_read_reg32(P_PREG_PAD_GPIO2_O) & (1<<3)) != 0)
+			    aml_clr_reg32_mask(P_PREG_PAD_GPIO2_O,(1<<3));
+
+			break;
+		case VOUT_VGA:
+			// set YPBR_EN# to high
+			if((aml_read_reg32(P_PREG_PAD_GPIO2_O) & (1<<2)) == 0)
+				aml_set_reg32_mask(P_PREG_PAD_GPIO2_O,(1<<2));
+
+			// set CVBS_EN# to low
+			if((aml_read_reg32(P_PREG_PAD_GPIO2_O) & (1<<3)) != 0)
+			    aml_clr_reg32_mask(P_PREG_PAD_GPIO2_O,(1<<3));
+
+			break;
+		default:
+			break;
+	}
+
+    aml_clr_reg32_mask(P_PREG_PAD_GPIO2_EN_N,(1<<2));//GPIOC2
+    aml_clr_reg32_mask(P_PREG_PAD_GPIO2_EN_N,(1<<3));//GPIOC3
+
+	return ;
+}
+
+static struct aml_vdac_switch_platform_data aml_vdac_switch_platdata =
+{
+	.vdac_switch_change_type_func = vdac_hw_switch,
+};
+
+static struct platform_device meson_device_vdac_switch = {
+    .name       = "mesonvdacswitch",
+    .id     = -1,
+    .num_resources  = 0,
+    .resource   = NULL,
+    .dev = {
+        .platform_data = &aml_vdac_switch_platdata,
+    },
+};
 
 static struct meson_pm_config aml_pm_pdata = {
     .pctl_reg_base = (void *)IO_APB_BUS_BASE,
@@ -1382,7 +1505,11 @@ static struct platform_device aml_pm_device = {
 static struct platform_device  *platform_devs[] = {
     &aml_uart_device,
     &meson_device_fb,
+    &meson_device_vdac_switch,
+    &meson_device_vout,
+#ifdef CONFIG_AM_STREAMING
     &meson_device_codec,
+#endif
 #if defined(CONFIG_SND_AML_M3)
     &aml_audio,
     &aml_dai,
@@ -1399,6 +1526,9 @@ static struct platform_device  *platform_devs[] = {
 #endif
 #ifdef CONFIG_SARADC_AM
     &saradc_device,
+#endif
+#ifdef CONFIG_AM_REMOTE
+    &meson_device_remote,
 #endif
 #if defined(CONFIG_ADC_KEYPADS_AM)||defined(CONFIG_ADC_KEYPADS_AM_MODULE)
     &adc_kp_device,
@@ -1419,7 +1549,7 @@ static struct platform_device  *platform_devs[] = {
     &aml_nand_device,
 #endif
 #if defined(CONFIG_TVIN_VDIN)
-    //&vdin_device,
+    &vdin_device,
 #endif
 #if defined(CONFIG_AML_AUDIO_DSP)
     &audiodsp_device,
@@ -1432,6 +1562,15 @@ static struct platform_device  *platform_devs[] = {
 #endif
 #ifdef CONFIG_POST_PROCESS_MANAGER
     &ppmgr_device,
+#endif
+#ifdef CONFIG_FREE_SCALE
+        &freescale_device,
+#endif
+#if defined(CONFIG_AM_DEINTERLACE) || defined (CONFIG_DEINTERLACE)
+    &deinterlace_device,
+#endif
+#if defined(CONFIG_AM_TV_OUTPUT2)
+    &vout2_device,   
 #endif
 #if defined(CONFIG_I2C_AML) || defined(CONFIG_I2C_HW_AML)
     &aml_i2c_device,
@@ -1454,7 +1593,7 @@ static void __init power_hold(void)
 
 	//printk(KERN_INFO "set_hdmi power up\n");
 	// HDMI Power +5V -- GPIO D6, ACTIVE HIGH
-	gpio_direction_output( GPIO_PWR_HDMI, 1);
+//	gpio_direction_output( GPIO_PWR_HDMI, 1);
 
 	// Turn On Wifi Power. So the wifi-module can be detected.
 	// extern_usb_wifi_power(1);
@@ -1462,11 +1601,15 @@ static void __init power_hold(void)
 
 static __init void meson_machine_init(void)
 {
+#ifdef CONFIG_AML_HDMI_TX
+    extern int setup_hdmi_dev_platdata(void* platform_data);
+    setup_hdmi_dev_platdata(&aml_hdmi_pdata);
+#endif
 #if defined(CONFIG_I2C_AML) || defined(CONFIG_I2C_HW_AML)
 	aml_i2c_init();
 #endif
 #ifdef CONFIG_AM_REMOTE
-//	setup_remote_device();
+	setup_remote_device();
 #endif
 #ifdef CONFIG_EFUSE
 	setup_aml_efuse();	
