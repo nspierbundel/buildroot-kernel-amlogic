@@ -607,18 +607,6 @@ mali_bool mali_group_power_is_on(struct mali_group *group)
 	return group->power_is_on;
 }
 
-inline mali_bool mali_group_power_is_on_2(struct mali_group *group)
-{
-#ifdef DEBUG
-	if(_mali_osk_lock_get_owner(group->lock) == _mali_osk_get_tid())
-		return group->power_is_on;
-	else 
-		return MALI_FALSE;
-#else
-	return group->power_is_on;
-#endif
-}
-
 void mali_group_power_off(void)
 {
 	int i;

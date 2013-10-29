@@ -1,5 +1,13 @@
 if ARCH_MESON3
 
+
+
+config XBMC_BUILD
+        bool "XBMC support"
+        default n
+        help
+          Compile kernel with Linux XBMC support
+
 menu    "Meson Timer Setting"
 config MESON_TIMERA
 	bool "Enable EE Domain Timer A"
