@@ -262,12 +262,32 @@ static void set_usb_a_vbus_power(char is_power_on)
 {
 
 }
+
+static void set_usb_b_vbus_power(char is_power_on)
+{ /*wifi rtl8188cus power control*/
+/*#define USB_B_POW_GPIO         GPIOC_bank_bit0_15(5)
+#define USB_B_POW_GPIO_BIT     GPIOC_bit_bit0_15(5)
+#define USB_B_POW_GPIO_BIT_ON   1
+#define USB_B_POW_GPIO_BIT_OFF  0
+    if(is_power_on) {
+        printk(KERN_INFO "set usb b port power on (board gpio %d)!\n",USB_B_POW_GPIO_BIT);
+        set_gpio_mode(USB_B_POW_GPIO, USB_B_POW_GPIO_BIT, GPIO_OUTPUT_MODE);
+        set_gpio_val(USB_B_POW_GPIO, USB_B_POW_GPIO_BIT, USB_B_POW_GPIO_BIT_ON);
+    } else    {
+        printk(KERN_INFO "set usb b port power off (board gpio %d)!\n",USB_B_POW_GPIO_BIT);
+        set_gpio_mode(USB_B_POW_GPIO, USB_B_POW_GPIO_BIT, GPIO_OUTPUT_MODE);
+        set_gpio_val(USB_B_POW_GPIO, USB_B_POW_GPIO_BIT, USB_B_POW_GPIO_BIT_OFF);
+    }
+*/}
+
+
+
 static  int __init setup_usb_devices(void)
 {
     struct lm_device * usb_ld_a, *usb_ld_b;
     usb_ld_a = alloc_usb_lm_device(USB_PORT_IDX_A);
     usb_ld_b = alloc_usb_lm_device (USB_PORT_IDX_B);
-//    usb_ld_a->param.usb.set_vbus_power = set_usb_a_vbus_power;
+//    usb_ld_b->param.usb.set_vbus_power = set_usb_b_vbus_power;
 //#ifdef CONFIG_SMP    
  	usb_ld_a->param.usb.port_type = USB_PORT_TYPE_HOST;
  	usb_ld_b->param.usb.port_type = USB_PORT_TYPE_HOST;
@@ -1008,6 +1028,21 @@ void extern_usb_wifi_power(int is_power_on)
 
 EXPORT_SYMBOL(extern_usb_wifi_power);
 
+void extern_usb_vccx2_power(int is_power_on)
+{
+ printk(KERN_INFO "usb_vccx2_power %s\n", is_power_on ? "On" : "Off");
+   /* USB +5v Power Enable internal port, GPIO D6, ACTIVE LOW */
+        if(is_power_on) {
+     gpio_direction_output(GPIO_PWR_VCCx2, 0);
+   } else {
+     gpio_direction_output(GPIO_PWR_VCCx2, 1);
+   }
+}
+
+EXPORT_SYMBOL(extern_usb_vccx2_power);
+
+
+
 static struct aml_card_info  amlogic_card_info[] = {
     [0] = {
         .name = "sd_card",
@@ -1602,6 +1637,8 @@ static void __init power_hold(void)
 
 	// Turn On Wifi Power. So the wifi-module can be detected.
 	 extern_usb_wifi_power(1);
+	// Turn On vccx2 Power. So the usb can be detected.
+	extern_usb_vccx2_power(1);
 }
 
 static __init void meson_machine_init(void)
