@@ -995,13 +995,18 @@ static struct resource amlogic_card_resource[] = {
     }
 };
 
-void extern_wifi_power(int is_power)
+void extern_usb_wifi_power(int is_power_on)
 {
-    // TODO: Add Right Registers
-//    reg_on_control(is_power);
+ printk(KERN_INFO "usb_wifi_power %s\n", is_power_on ? "On" : "Off");
+   /* USB +3v3 Power Enable internal port, GPIO C5, ACTIVE LOW */ 
+        if(is_power_on) {
+     gpio_direction_output(GPIO_PWR_WIFI, 1);
+   } else {
+     gpio_direction_output(GPIO_PWR_WIFI, 0);
+   }
 }
 
-EXPORT_SYMBOL(extern_wifi_power);
+EXPORT_SYMBOL(extern_usb_wifi_power);
 
 static struct aml_card_info  amlogic_card_info[] = {
     [0] = {
@@ -1593,10 +1598,10 @@ static void __init power_hold(void)
 
 	//printk(KERN_INFO "set_hdmi power up\n");
 	// HDMI Power +5V -- GPIO D6, ACTIVE HIGH
-//	gpio_direction_output( GPIO_PWR_HDMI, 1);
+	gpio_direction_output( GPIO_PWR_HDMI, 1);
 
 	// Turn On Wifi Power. So the wifi-module can be detected.
-	// extern_usb_wifi_power(1);
+	 extern_usb_wifi_power(1);
 }
 
 static __init void meson_machine_init(void)
