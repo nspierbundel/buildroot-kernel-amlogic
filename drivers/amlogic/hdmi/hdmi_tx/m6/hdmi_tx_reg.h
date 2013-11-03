@@ -1,11 +1,6 @@
 #ifndef _HDMI_TX_REG_H
 #define _HDMI_TRX_REG_H
-
-#undef M6_PLL_RESET
-#undef M6_PLL_WAIT_FOR_LOCK
-#undef HDMI_ADDR_PORT
-#undef HDMI_DATA_PORT
-
+#if 0
 #define M6_PLL_RESET(pll) \
 	aml_write_reg32(pll,aml_read_reg32(pll) | (1<<29));
 
@@ -15,7 +10,7 @@
 	do{\
 		__udelay(1000);\
 	}while((aml_read_reg32(pll)&0x80000000)==0);
-
+#endif
 //M6 PLL control value 
 #define M6_PLL_CNTL_CST2 (0x814d3928)
 #define M6_PLL_CNTL_CST3 (0x6b425012)
@@ -51,11 +46,11 @@ typedef struct {
     unsigned short cbus_addr;
     unsigned char gate_bit;
 }Hdmi_Gate_s;
-
+#if 0
 #define HDMI_ADDR_PORT 0x2000
 #define HDMI_DATA_PORT 0x2004
 #define HDMI_CNTL_PORT 0x2008
-
+#endif
 
 //inside chip
 // tx base addr  : 0x00000 ~ 0x03fff

@@ -63,10 +63,12 @@
 
 type_printk input_dbg;
 #ifdef CONFIG_AML_HDMI_TX
+#if 0
 extern void cec_inactive_source(void);
 extern void cec_set_standby(void);
 extern int cec_power_flag;
 unsigned char cec_repeat = 10;
+#endif
 #endif
 
 static DEFINE_MUTEX(remote_enable_mutex);
@@ -425,7 +427,8 @@ static inline int remote_hw_reprot_key(struct remote *remote_data)
 	} else if (scan_code == 0 && status & 0x1) {	//repeate key
 		scan_code = last_scan_code;
 		if((remote_data->custom_code[0] == last_custom_code )||(remote_data->custom_code[1] == last_custom_code) ) {
-#ifdef CONFIG_AML_HDMI_TX
+ #ifdef CONFIG_AML_HDMI_TX
+#if 0
 		//printk("last_scan_code:%x\n", last_scan_code);
 		if((((scan_code >> 16) & 0xff) == 0x1a) && (!cec_repeat)) {
 		    cec_repeat = 10;
@@ -434,6 +437,7 @@ static inline int remote_hw_reprot_key(struct remote *remote_data)
 		}
 		if(((scan_code >> 16) & 0xff) == 0x1a)
  		    cec_repeat--;
+#endif
 #endif
 		if (remote_data->repeat_enable) {
 			if ((remote_data->repeat_tick < jiffies)&&(repeat_flag == 1)) {

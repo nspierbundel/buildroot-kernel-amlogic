@@ -43,10 +43,6 @@
 #define hdmitx_cec_dbg_print(fmt, args...)
 #endif
 
-extern unsigned int cec_tx_irq_flag;
-extern unsigned int cec_tx_irq_syn_flag;
-void fiq_gpio_test(unsigned int cmd);
-
 #define MSG_P0( init, follow, opcode )	{				\
 	gbl_msg[0] = (init)<<4 | (follow);					\
 	gbl_msg[1] = (opcode);								\
@@ -147,15 +143,6 @@ enum cec_dev_type_addr {
 typedef struct _context_t {
     unsigned char state;
 } context_t;
-
-typedef enum  {
-    CEC_UNRECONIZED_OPCODE = 0x0,
-    CEC_NOT_CORRECT_MODE_TO_RESPOND,
-    CEC_CANNOT_PROVIDE_SOURCE,
-    CEC_INVALID_OPERAND,
-    CEC_REFUSED,
-    CEC_UNABLE_TO_DETERMINE,
-} cec_feature_abort_e;
 
 /*
  * CEC OPCODES
@@ -393,7 +380,6 @@ typedef struct {
     unsigned int vendor_id:24;
 //    vendor_id_t vendor_id;
     unsigned char dev_type;
-    unsigned char menu_status;
     cec_power_status_e power_status;
     union {
         unsigned short phy_addr_4;
@@ -505,11 +491,12 @@ typedef enum {
 } cec_device_menu_state_e;
 
 extern cec_rx_msg_buf_t cec_rx_msg_buf;
-extern unsigned char cec_power_flag;
 
-int cec_ll_tx(const unsigned char *msg, unsigned char len);
+int cec_ll_tx(unsigned char *msg, unsigned char len, unsigned char *stat_header);
 
 void cec_test_function(unsigned char* arg, unsigned char arg_cnt);
+void cec_init(hdmitx_dev_t* hdmitx_device);
+void cec_uninit(hdmitx_dev_t* hdmitx_device);
 void cec_node_init(hdmitx_dev_t* hdmitx_device);
 void cec_node_uninit(hdmitx_dev_t* hdmitx_device);
 
@@ -564,36 +551,31 @@ void cec_system_audio_mode_request(void);
 void cec_report_audio_status(void);
 void cec_get_menu_language_smp(void);
 void cec_device_vendor_id_smp(void);
-void cec_menu_status_smp(cec_device_menu_state_e status);
-void cec_set_imageview_on_irq(void);
+void cec_menu_status_smp(cec_rx_message_t* pcec_message);
 
 void cec_report_physical_address_smp(void);
 void cec_imageview_on_smp(void);
 void cec_active_source_smp(void);
-void cec_active_source_irq(void);
 
 size_t cec_usrcmd_get_global_info(char * buf);
 void cec_usrcmd_set_dispatch(const char * buf, size_t count);
 void cec_usrcmd_set_config(const char * buf, size_t count);
-void cec_usrcmd_set_lang_config(const char * buf, size_t count); 
 void cec_input_handle_message(void);
 void cec_send_event_irq(void);
 void cec_standby_irq(void);
 void cec_user_control_released_irq(void);
 void cec_user_control_pressed_irq(void);
-void cec_inactive_source(void);
-void cec_set_standby(void);
 
 extern struct input_dev *remote_cec_dev;
 extern __u16 cec_key_map[];
 extern unsigned int cec_key_flag;
 
 extern cec_global_info_t cec_global_info;
+extern unsigned char hdmi_cec_func_config;
 extern unsigned char check_cec_msg_valid(const cec_rx_message_t* pcec_message);
 extern void cec_send_event(cec_rx_message_t* pcec_message);
 extern void cec_user_control_pressed(cec_rx_message_t* pcec_message);
 extern void cec_user_control_released(cec_rx_message_t* pcec_message);  
 extern void cec_standby(cec_rx_message_t* pcec_message);
-extern void cec_key_init(void);
 #endif
 
