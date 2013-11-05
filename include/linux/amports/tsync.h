@@ -27,6 +27,7 @@
 #define VIDEO_HOLD_SLOWSYNC_THRESHOLD        (TIME_UNIT90K / 10)
 #define AV_DISCONTINUE_THREDHOLD_MIN    (TIME_UNIT90K * 3)
 #define AV_DISCONTINUE_THREDHOLD_MAX    (TIME_UNIT90K * 60)
+#define AV_DISCONTINUE_THREDHOLD    (TIME_UNIT90K * 8)
 
 typedef enum {
     VIDEO_START,
@@ -102,7 +103,8 @@ extern int tsync_set_av_threshold_max(int max);
 
 static inline u32 tsync_vpts_discontinuity_margin(void)
 {
-    return tsync_get_av_threshold_min();
+//    return tsync_get_av_threshold_min();
+return AV_DISCONTINUE_THREDHOLD;
 }
 
 #endif /* TSYNC_H */
