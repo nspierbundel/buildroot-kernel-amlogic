@@ -8,7 +8,6 @@
 #include <linux/mutex.h>
 #include <linux/device.h>
 #include <linux/workqueue.h>
-#include <linux/delay.h>
 
 #include <linux/timer.h>
 
@@ -20,7 +19,7 @@
 #include <linux/amports/timestamp.h>
 #include "dsp_mailbox.h"
 #include "dsp_codec.h"
-extern void set_pcminfo_data(void * pcm_encoded_info);
+extern set_pcminfo_data(void * pcm_encoded_info);
 static void audiodsp_mailbox_work_queue(struct work_struct*);
 static struct audiodsp_work_t{
 char* buf;
@@ -44,6 +43,7 @@ extern unsigned int IEC958_chstat1_l;
 extern unsigned int IEC958_chstat1_r;
 extern unsigned int IEC958_mode_raw;
 extern unsigned int IEC958_mode_codec;
+extern int format_change_flag;
 
 int dsp_mailbox_send(struct audiodsp_priv *priv,int overwrite,int num,int cmd,const char *data,int len)
 {
@@ -80,7 +80,7 @@ int dsp_mailbox_send(struct audiodsp_priv *priv,int overwrite,int num,int cmd,co
 int get_mailbox_data(struct audiodsp_priv *priv,int num,struct mail_msg *msg)
 {
 	unsigned long flags;
-  dma_addr_t buf_map;	
+    	dma_addr_t buf_map;	
 	struct mail_msg *m;
 	if(num>31 || num <0)
 			return -1;
@@ -91,7 +91,7 @@ int get_mailbox_data(struct audiodsp_priv *priv,int num,struct mail_msg *msg)
     //dma_unmap_single(priv->dev,dsp_addr_map,sizeof(*m),DMA_FROM_DEVICE);
 	msg->cmd=m->cmd; 
 	msg->data=m->data;
-  msg->data = (char *)((unsigned)msg->data+AUDIO_DSP_START_ADDR);
+       msg->data = (char *)((unsigned)msg->data+AUDIO_DSP_START_ADDR);
 	msg->status=m->status;
 	msg->len=m->len;
 	if(msg->len && msg->data != NULL){
@@ -110,8 +110,8 @@ static irqreturn_t audiodsp_mailbox_irq(int irq, void *data)
 	unsigned long status,fiq_mask;
 	struct mail_msg msg;
 	int i = 0;
-	status=READ_VREG(MB1_REG);
-	fiq_mask=READ_VREG(MB1_SEL);
+	status=READ_MPEG_REG(ASSIST_MBOX1_IRQ_REG); 
+	fiq_mask=READ_MPEG_REG(ASSIST_MBOX1_FIQ_SEL); 
 	status=status&fiq_mask;
 	if(status&(1<<M1B_IRQ0_PRINT))
 		{
@@ -119,9 +119,8 @@ static irqreturn_t audiodsp_mailbox_irq(int irq, void *data)
 		SYS_CLEAR_IRQ(M1B_IRQ0_PRINT);
 	//	inv_dcache_range((unsigned  long )msg.data,(unsigned long)msg.data+msg.len);
 	
-		DSP_PRNT("%s", msg.data);
-	    //audiodsp_work.buf = msg.data;
-	    //schedule_work(&audiodsp_work.audiodsp_workqueue);		
+	    audiodsp_work.buf = msg.data;
+        schedule_work(&audiodsp_work.audiodsp_workqueue);		
 		}
 	if(status&(1<<M1B_IRQ1_BUF_OVERFLOW))
 		{
@@ -190,7 +189,8 @@ static irqreturn_t audiodsp_mailbox_irq(int irq, void *data)
 			if(fmt->data.pcm_encoded_info){
 				set_pcminfo_data(fmt->data.pcm_encoded_info);
 			}
-			DSP_PRNT("audio info from dsp:sample_rate=%d channel_num=%d\n",priv->frame_format.sample_rate,priv->frame_format.channel_num);
+			format_change_flag=1;
+			DSP_PRNT("format_change_flag=%d sample_rate=%d channel_num=%d\n",format_change_flag,priv->frame_format.sample_rate,priv->frame_format.channel_num);
 		}
         if(status & (1<<M1B_IRQ8_IEC958_INFO)){
             struct digit_raw_output_info* info;
@@ -293,69 +293,15 @@ int audiodsp_init_mailbox(struct audiodsp_priv *priv)
 	
 	return 0;
 }
-int audiodsp_get_audioinfo(struct audiodsp_priv *priv)
-{
-	int ret = -1;
-	int audio_info = 0;
-       audio_info = DSP_RD(DSP_AUDIO_FORMAT_INFO);	
-	if(priv->frame_format.valid == (CHANNEL_VALID|DATA_WIDTH_VALID|SAMPLE_RATE_VALID)){
-		ret = 0;
-		goto exit;
-	}
-	else if(audio_info){
-		priv->frame_format.channel_num = audio_info&0xf;
-		if(priv->frame_format.channel_num)
-			priv->frame_format.valid |= CHANNEL_VALID;
-		priv->frame_format.data_width= (audio_info>>4)&0x3f;
-		if(priv->frame_format.data_width)
-			priv->frame_format.valid |= DATA_WIDTH_VALID;
-		priv->frame_format.sample_rate = (audio_info>>10);
-		if(priv->frame_format.sample_rate)
-			priv->frame_format.valid |= SAMPLE_RATE_VALID;
-		ret = 0;
-	}
-	if(ret == 0){
-		DSP_PRNT(" audiodsp got audioinfo:[ch num %d],[sr  %d]", \
-		priv->frame_format.channel_num,priv->frame_format.sample_rate);
-	}
-exit:
-	return ret;
-
-}
 int audiodsp_release_mailbox(struct audiodsp_priv *priv)
 {
 	free_irq(INT_MAILBOX_1B,(void *)priv);
     return 0;
 }
-static unsigned int  hdmi_sr;
 int  mailbox_send_audiodsp(int overwrite,int num,int cmd,const char *data,int len)
 {
 	int res = -1;
-	int time_out = 0;
-	if(DSP_RD(DSP_STATUS) != DSP_STATUS_RUNING){
-		printk("fatal error,dsp must be running before mailbox sent\n");
-		return -1;
-	}	
-	DSP_WD(DSP_GET_EXTRA_INFO_FINISH, 0);
-	while(time_out++ < 10){
-		if((num == M2B_IRQ0_DSP_AUDIO_EFFECT) && (cmd == DSP_CMD_SET_HDMI_SR)){
-			hdmi_sr = *(unsigned int *)data;
-			DSP_PRNT("<hdmi to dsp mailbox> sr changed to %d\n",hdmi_sr);
-			DSP_WD(DSP_HDMI_SR,hdmi_sr);
-			res = dsp_mailbox_send(audiodsp_privdata(),overwrite,num,cmd,(char*)&hdmi_sr,sizeof(unsigned int));
-			return res;
-		}
-		else{
-			res = dsp_mailbox_send(audiodsp_privdata(),overwrite,num,cmd,data,len);
-			msleep(10);
-		}	
-		if(DSP_RD(DSP_GET_EXTRA_INFO_FINISH) == 0x12345678)
-		        break;
-	}
-	if(time_out == 10){
-		printk("error,dsp transfer mailbox time out\n");
-		return -1;
-	}
+	res = dsp_mailbox_send(audiodsp_privdata(),overwrite,num,cmd,data,len);
 	return res;
 }
 EXPORT_SYMBOL(mailbox_send_audiodsp);

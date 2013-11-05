@@ -30,8 +30,9 @@ static int major_spdif;
 static struct class *class_spdif;
 static struct device *dev_spdif;
 static struct mutex mutex_spdif;  
+static  _iec958_data_info   iec958_info = {0};
 static  unsigned iec958_wr_offset;
-extern void	aml_alsa_hw_reprepare(void);
+extern void	aml_alsa_hw_reprepare();
 extern  void audio_enable_ouput(int flag);
 
 extern unsigned int IEC958_mode_raw;
@@ -77,7 +78,7 @@ static int audio_spdif_release(struct inode *inode, struct file *file)
 	IEC958_mode_codec = 0;
     return 0;
 }
-static long audio_spdif_ioctl(struct file *file, unsigned int cmd, unsigned long args)
+static int audio_spdif_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long args)
 {
 	int err = 0;
 	unsigned long  *val = (unsigned long*)args;
@@ -165,7 +166,7 @@ static int audio_spdif_mmap(struct file *file, struct vm_area_struct *vma)
     }
     printk("audio spdif: mmap finished\n");	
     printk("audio spdif: 958 dma buf:py addr 0x%x,vir addr 0x%x\n",READ_MPEG_REG(AIU_MEM_IEC958_START_PTR), \
-			(unsigned int)phys_to_virt(READ_MPEG_REG(AIU_MEM_IEC958_START_PTR)));		
+			phys_to_virt((void*)READ_MPEG_REG(AIU_MEM_IEC958_START_PTR)));		
     return 0;
 
 }
@@ -206,14 +207,15 @@ static struct file_operations fops_spdif = {
 };
 static void create_audio_spdif_attrs(struct class* class)
 {
-  int i=0,ret;
+  int i=0;
   for(i=0; audio_spdif_attrs[i].attr.name; i++){
-    ret=class_create_file(class, &audio_spdif_attrs[i]);
+    class_create_file(class, &audio_spdif_attrs[i]);
   }
 }
 static int __init audio_spdif_init_module(void)
 {
     void *ptr_err;
+    int ret = 0;
     major_spdif = register_chrdev(0, DEVICE_NAME, &fops_spdif);
     if (major_spdif < 0) {
         printk(KERN_ALERT "Registering spdif char device %s failed with %d\n", DEVICE_NAME, major_spdif);
@@ -231,22 +233,20 @@ static int __init audio_spdif_init_module(void)
     mutex_init(&mutex_spdif);	
     printk(KERN_INFO "amlogic audio spdif interface device init!\n");
     return 0;
-#if 0
 err2:
     device_destroy(class_spdif, MKDEV(major_spdif, 0));
-#endif
 err1:
     class_destroy(class_spdif);
 err0:
     unregister_chrdev(major_spdif, DEVICE_NAME);
     return PTR_ERR(ptr_err);
 }
-static void __exit  audio_spdif_exit_module(void)
+static int __exit  audio_spdif_exit_module(void)
 {
     device_destroy(class_spdif, MKDEV(major_spdif, 0));
     class_destroy(class_spdif);
     unregister_chrdev(major_spdif, DEVICE_NAME);	
-    //return 0;	
+    return 0;	
 }
 module_init(audio_spdif_init_module);
 module_exit(audio_spdif_exit_module);

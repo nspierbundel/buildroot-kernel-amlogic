@@ -8,7 +8,7 @@
  *  Created: 04/16 2012
  *
  *******************************************************************/
-#include <mach/cpu.h>
+
 #include "pcmenc_stream.h"
 #include <linux/amports/dsp_register.h>
 #include <linux/dma-mapping.h>
@@ -33,7 +33,7 @@ typedef struct
 
 static log_stream_t log_stream = {0};
 
-static inline int internal_read(char __user *buf, int size, int intact);
+static inline int internal_read(unsigned char *buf, int size, int intact);
 
 static inline unsigned long get_read_pointer(void);
 static inline void set_read_pointer(void);
@@ -106,12 +106,12 @@ int pcmenc_stream_content(void)
     return content;
 }
 
-static inline int internal_read(char __user *buf, int size, int intact)
+static inline int internal_read(unsigned char *buf, int size, int intact)
 {
     int len;
     int content = pcmenc_stream_content();
     int tail = 0;
-    unsigned long ret;
+
 
     if(intact){
         len = size > content ? -1 : size;
@@ -127,33 +127,16 @@ static inline int internal_read(char __user *buf, int size, int intact)
 
         tail = log_stream.end - log_stream.rpointer;
         cache_invalidate(log_stream.rpointer, tail);
-        ret = copy_to_user((void *)buf, (void *)(log_stream.rpointer), tail);
-	
-	if (ret) {
-	    printk("internal_read: Error copy_to_user: step 1: %ld\n", ret); 
-	    // return -EINVAL;
-	}
+        memcpy((void *)buf, (void *)(log_stream.rpointer), tail);
 
         log_stream.rpointer = log_stream.start;
         cache_invalidate(log_stream.rpointer, len - tail);
-        ret = copy_to_user((void *)(buf + tail), (void *)(log_stream.rpointer), len - tail);
-	
-	if (ret) {
-	    printk("internal_read: Error copy_to_user: step 2: %ld\n", ret); 
-	    // return -EINVAL;
-	}
-	
+        memcpy((void *)(buf + tail), (void *)(log_stream.rpointer), len - tail);
         log_stream.rpointer += len - tail;
 
     }else{
         cache_invalidate(log_stream.rpointer, len);
-        ret = copy_to_user((void *)buf, (void *)(log_stream.rpointer), len);
-	
-	if (ret) {
-	    printk("internal_read: Error copy_to_user: step 3: %ld\n", ret); 
-	    // return -EINVAL;
-	}
-	
+        memcpy((void *)buf, (void *)(log_stream.rpointer), len);
         log_stream.rpointer += len;
     }
 
@@ -163,12 +146,13 @@ static inline int internal_read(char __user *buf, int size, int intact)
 }
 
 
-int pcmenc_stream_read(char __user *buffer, int size)
+int pcmenc_stream_read(unsigned char *buf, int size)
 {
-    if(log_stream.start == 0){
+    if(buf == 0 || log_stream.start == 0){
         return 0;
     }
-    return internal_read(buffer, size, 0);
+
+    return internal_read(buf, size, 0);
 }
 
 int pcmenc_stream_init(void)

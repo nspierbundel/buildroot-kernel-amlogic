@@ -15,7 +15,6 @@
 #include <asm/uaccess.h>	
 #include <linux/device.h>	
 #include <linux/mm.h>
-#include <mach/am_regs.h>
 #include "pcmenc_stream.h"	
 #include <linux/amports/dsp_register.h>
 
@@ -30,7 +29,7 @@ static ssize_t audiodsp_pcmenc_read(struct file *, char *, size_t, loff_t *);
 static ssize_t audiodsp_pcmenc_write(struct file *, const char *, size_t, loff_t *);
 static int audiodsp_pcmenc_mmap(struct file *filp, struct vm_area_struct *vma);
 
-static long audiodsp_pcmenc_ioctl( struct file *file, unsigned int cmd, unsigned long args);
+static int audiodsp_pcmenc_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long args);
 static int audiodsp_pcmenc_create_stream_buffer(void);
 static int audiodsp_pcmenc_destroy_stream_buffer(void);
 
@@ -51,6 +50,7 @@ static struct class *class_pcmenc;
 static struct device *dev_pcmenc;
 static int device_opened = 0;	/* Is device open?  
                              * Used to prevent multiple access to device */
+static char *buf = NULL;	
 static pcm51_encoded_info_t pcminfo = {0};
 typedef struct {
        void *stream_buffer_mem; 
@@ -68,8 +68,8 @@ static ssize_t pcmenc_ptr_show(struct class* class, struct class_attribute* attr
 {
 	  ssize_t ret = 0;
 	  ret = sprintf(buf, "pcmenc runtime info:\n"
-	                     "  pcmenc rd ptr :\t%lx\n"    
-	                     "  pcmenc wr ptr :\t%lx\n"    
+	                     "  pcmenc rd ptr :\t%x\n"    
+	                     "  pcmenc wr ptr :\t%x\n"    
 	                     "  pcmenc level  :\t%x\n",
 	                     (DSP_RD(DSP_DECODE_51PCM_OUT_RD_ADDR)),
 	                     (DSP_RD(DSP_DECODE_51PCM_OUT_WD_ADDR)),
@@ -83,9 +83,9 @@ static struct class_attribute pcmenc_attrs[]={
 };
 static void create_pcmenc_attrs(struct class* class)
 {
-  int i=0,ret;
+  int i=0;
   for(i=0; pcmenc_attrs[i].attr.name; i++){
-    ret=class_create_file(class, &pcmenc_attrs[i]);
+    class_create_file(class, &pcmenc_attrs[i]);
   }
 }
 static void remove_amaudio_attrs(struct class* class)
@@ -197,20 +197,21 @@ static ssize_t audiodsp_pcmenc_read(struct file *filp,
         size_t length,	
         loff_t * offset)
 {
-#if 1
+#if 0
     int bytes_read = 0;
     int len = 0;
-    if(buffer == NULL){
+
+    if(buf == NULL){
         return 0;
     }
+
     len = MIN(length, pcmenc_stream_content());
-    bytes_read = pcmenc_stream_read(buffer, len);
+    bytes_read = pcmenc_stream_read(buf, len);
+    copy_to_user((void *)buffer, (const char *)buf, bytes_read);
     return bytes_read;
-#else
+#endif
     printk(KERN_ALERT "Sorry, read operation isn't supported.\n");
     return -EINVAL;
-#endif
-	return length;
 }
 
 static ssize_t audiodsp_pcmenc_write(struct file *filp, const char *buff, size_t len, loff_t * off)
@@ -240,7 +241,7 @@ static int audiodsp_pcmenc_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	
 }
-static long audiodsp_pcmenc_ioctl( struct file *file, unsigned int cmd, unsigned long args)
+static int audiodsp_pcmenc_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long args)
 {
 	int ret = 0;
 	unsigned long *val = (unsigned long *)args;
@@ -262,7 +263,7 @@ static long audiodsp_pcmenc_ioctl( struct file *file, unsigned int cmd, unsigned
 
 			break;
 		case AUDIODSP_PCMENC_GET_PCMINFO:
-			if(args == 0){
+			if(args == NULL){
 				printk("pcm enc: args invalid\n");
 				ret = -EINVAL;
 			}
@@ -316,7 +317,7 @@ static int audiodsp_pcmenc_create_stream_buffer(void)
     DSP_WD(DSP_DECODE_51PCM_OUT_RD_ADDR,ARM_2_ARC_ADDR_SWAP(priv_data.stream_buffer_start));
     DSP_WD(DSP_DECODE_51PCM_OUT_WD_ADDR,ARM_2_ARC_ADDR_SWAP(priv_data.stream_buffer_start));
 
-    printk("DSP pcmenc stream buffer to [%#lx-%#lx]\n",(long unsigned int)ARM_2_ARC_ADDR_SWAP(priv_data.stream_buffer_start),(long unsigned int) ARM_2_ARC_ADDR_SWAP(priv_data.stream_buffer_end));
+    printk("DSP pcmenc stream buffer to [%#lx-%#lx]\n",ARM_2_ARC_ADDR_SWAP(priv_data.stream_buffer_start), ARM_2_ARC_ADDR_SWAP(priv_data.stream_buffer_end));
     return 0;
 }
 

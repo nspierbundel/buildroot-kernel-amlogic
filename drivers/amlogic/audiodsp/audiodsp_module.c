@@ -12,23 +12,17 @@
 #include <linux/timer.h>
 #include <linux/delay.h>
 #include <asm/cacheflush.h>
-#include <mach/am_regs.h>
+//#include <asm/arch/am_regs.h>
 #include <linux/major.h>
 #include <linux/slab.h>
-
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-#include <mach/mod_gate.h>
-#endif
 
 //#include <asm/dsp/audiodsp_control.h>
 #include "audiodsp_control.h"	// temp here
 
 #include <asm/uaccess.h>
 #include <linux/amports/amstream.h>
+
+#include <mach/am_regs.h>
 
 #include "audiodsp_module.h"
 #include "dsp_control.h"
@@ -49,11 +43,13 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Zhou Zhi <zhi.zhou@amlogic.com>");
 MODULE_VERSION("1.0.0");
 
+int format_change_flag=0;
 extern unsigned IEC958_mode_raw;
 extern unsigned IEC958_mode_codec;
 extern int decopt;
 static int IEC958_mode_raw_last = 0;
 static int IEC958_mode_codec_last = 0;
+
 /* code for DD/DD+ DRC control  */
 /* Dynamic range compression mode */
 typedef enum {
@@ -66,43 +62,14 @@ typedef enum {
 #define DRC_HIGH_CUT_BIT 3
 #define DRC_LOW_BST_BIT 16
 static unsigned ac3_drc_control = (GBL_COMP_LINE<<DRC_MODE_BIT)|(100<<DRC_HIGH_CUT_BIT)|(100<<DRC_LOW_BST_BIT);
-/* code for DTS dial norm/downmix mode control */
-typedef enum{
-	DTS_DMX_LoRo = 0,
-	DTS_DMX_LtRt,
-}DTS_DMX_MODE;
-#define DTS_DMX_MODE_BIT  0
-#define DTS_DIAL_NORM_BIT  1
-#define DTS_DRC_SCALE_BIT  2
-static unsigned dts_dec_control = (DTS_DMX_LoRo<<DTS_DMX_MODE_BIT	)|(1<<DTS_DIAL_NORM_BIT)|(0<<DTS_DRC_SCALE_BIT);
-unsigned dsp_debug_flag;
-
+	
 extern struct audio_info * get_audio_info(void);
-extern void	aml_alsa_hw_reprepare(void);
+extern void	aml_alsa_hw_reprepare();
 void audiodsp_moniter(unsigned long);
 static struct audiodsp_priv *audiodsp_p;
 #define  DSP_DRIVER_NAME	"audiodsp"
 #define  DSP_NAME	"dsp"
 
-/**
- *  Audio codec necessary MIPS (KHz)
- */
- #if 0
-static unsigned int audiodsp_mips[]={
-    200000, //#define MCODEC_FMT_MPEG123 (1<<0)
-    200000, //#define MCODEC_FMT_AAC 	  (1<<1)
-    200000, //#define MCODEC_FMT_AC3 	  (1<<2)
-    200000, //#define MCODEC_FMT_DTS		  (1<<3)
-    200000, //#define MCODEC_FMT_FLAC	  (1<<4)
-    200000, //#define MCODEC_FMT_COOK		(1<<5)
-    200000, //#define MCODEC_FMT_AMR		(1<<6)
-    200000, //#define MCODEC_FMT_RAAC     (1<<7)
-    200000, //#define MCODEC_FMT_ADPCM	  (1<<8)
-    200000, //#define MCODEC_FMT_WMA     (1<<9)
-    200000, //#define MCODEC_FMT_PCM      (1<<10)
-    200000, //#define MCODEC_FMT_WMAPRO      (1<<11)
-};
-#endif
 #ifdef CONFIG_PM
 typedef struct {
     int event;
@@ -115,16 +82,16 @@ static audiodsp_pm_state_t pm_state;
 
 static void audiodsp_prevent_sleep(void)
 {
-    //struct audiodsp_priv* priv = audiodsp_privdata();
+    struct audiodsp_priv* priv = audiodsp_privdata();
     printk("audiodsp prevent sleep\n");
-    //wake_lock(&priv->wakelock);
+    wake_lock(&priv->wakelock);
 }
 
 static void audiodsp_allow_sleep(void)
 {
-    //struct audiodsp_priv *priv=audiodsp_privdata();
+    struct audiodsp_priv *priv=audiodsp_privdata();
     printk("audiodsp allow sleep\n");
-    //wake_unlock(&priv->wakelock);
+    wake_unlock(&priv->wakelock);
 }
 
 int audiodsp_start(void)
@@ -133,6 +100,7 @@ int audiodsp_start(void)
 	struct audiodsp_microcode *pmcode;
 	struct audio_info *audio_info;
 	int ret,i;
+	unsigned int decopt_reg;
 	priv->frame_format.valid=0;
 	priv->decode_error_count=0;
 	priv->last_valid_pts=0;
@@ -161,7 +129,7 @@ int audiodsp_start(void)
 	   (pmcode->fmt == MCODEC_FMT_PCM)  ||
 	   (pmcode->fmt == MCODEC_FMT_WMAPRO)||
 	   (pmcode->fmt == MCODEC_FMT_ALAC)||
-	  (pmcode->fmt & MCODEC_FMT_AC3) ||
+	   (pmcode->fmt & MCODEC_FMT_AC3) ||
 	   (pmcode->fmt & MCODEC_FMT_EAC3) ||	  
 	  (pmcode->fmt == MCODEC_FMT_APE) ||
 	  (pmcode->fmt == MCODEC_FMT_FLAC))
@@ -190,69 +158,22 @@ int audiodsp_start(void)
     }
 #endif
      }
+	decopt_reg = DSP_RD(DSP_DECODE_OPTION);
+	decopt_reg = (decopt_reg&(~0x00000018));
+	DSP_WD(DSP_DECODE_OPTION, decopt_reg);
+	DSP_PRNT("dsp set decopt_reg 3-4 bits: decopt_reg=0x%x \n",decopt_reg);
 	return ret;
 }
 
 static int audiodsp_open(struct inode *node, struct file *file)
 {
 	DSP_PRNT("dsp_open\n");
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6	
-	switch_mod_gate_by_type(MOD_MEDIA_CPU, 1);
-        /* Audio DSP firmware uses mailbox registers for communications 
-	 * with host processor. And these mailbox registers unfortunately 
-	 * falls into the assistant module, which is in vdec DOS clock domain.
-         * So we have to make sure the clock domain is enabled/disabled when
-         * audio firmware start/stop running.
-         * Note the module_gating has ref count so a flag 0 does
-         * not mean the vdec clock is gated off immediately.
-         */
-	switch_mod_gate_by_type(MOD_VDEC, 1);
-#endif
 	audiodsp_prevent_sleep();
 	return 0;
 
 }
 
-static unsigned long audiodsp_drop_pcm(unsigned long size)
-{
-	struct audiodsp_priv *priv = audiodsp_privdata();
-	size_t len;
-	int count = 0;
-	unsigned long drop_bytes = size;
-
-	mutex_lock(&priv->stream_buffer_mutex);
-	if(priv->stream_buffer_mem == NULL || !priv->dsp_is_started)
-		goto err;
-	
-	while(drop_bytes > 0){
-		len =dsp_codec_get_bufer_data_len(priv);
-		if(drop_bytes >= len){
-			dsp_codec_inc_rd_addr(priv, len);
-			drop_bytes -= len;
-			msleep(50);
-			count++;
-			if(count > 20)
-			    break;
-		}
-		else {
-			dsp_codec_inc_rd_addr(priv, drop_bytes);
-			drop_bytes = 0;
-		}	
-	}
-
-	mutex_unlock(&priv->stream_buffer_mutex);
-	if(count > 10)
-		printk("drop pcm data timeout! count = %d\n", count);
-	
-	return (size - drop_bytes);
-	
-err:
-		mutex_unlock(&priv->stream_buffer_mutex);
-		printk("error, can not drop pcm data!\n");
-		return 0;
-}
-
-static long audiodsp_ioctl(struct file *file, unsigned int cmd,
+static int audiodsp_ioctl(struct inode *node, struct file *file, unsigned int cmd,
 		      unsigned long args)
 {
 	struct audiodsp_priv *priv=audiodsp_privdata();
@@ -261,14 +182,13 @@ static long audiodsp_ioctl(struct file *file, unsigned int cmd,
 	int len;
 	unsigned long pts;
 	int ret=0;
-	unsigned long drop_size;
 	unsigned long *val=(unsigned long *)args;
+#ifdef ENABLE_WAIT_FORMAT
 	static int wait_format_times=0;
-	
+#endif	
 	switch(cmd)
 		{
-		case AUDIODSP_SET_FMT:			
-			
+		case AUDIODSP_SET_FMT:
 			priv->stream_fmt=args;
 			if(IEC958_mode_raw){// raw data pass through		
 				if(args == MCODEC_FMT_DTS)
@@ -288,11 +208,8 @@ static long audiodsp_ioctl(struct file *file, unsigned int cmd,
 				IEC958_mode_codec = 0;
 			if(args == MCODEC_FMT_AC3||args == MCODEC_FMT_EAC3) //for dd+ certification
 				DSP_WD(DSP_AC3_DRC_INFO,ac3_drc_control|(1<<31));
-			else if(args == MCODEC_FMT_DTS)
-				DSP_WD(DSP_DTS_DEC_INFO,dts_dec_control|(1<<31));
 			break;
-		case AUDIODSP_START:			
-			
+		case AUDIODSP_START:
 			if(IEC958_mode_codec || (IEC958_mode_codec_last != IEC958_mode_codec))
 			{
 				IEC958_mode_raw_last = IEC958_mode_raw;
@@ -318,6 +235,7 @@ static long audiodsp_ioctl(struct file *file, unsigned int cmd,
 			priv->decoded_nb_frames = 0;
 			priv->format_wait_count = 0;
 			break;
+#ifdef ENABLE_WAIT_FORMAT
 		case AUDIODSP_DECODE_START:			
 			if(priv->dsp_is_started)
 				{
@@ -331,17 +249,170 @@ static long audiodsp_ioctl(struct file *file, unsigned int cmd,
 			break;
 		case AUDIODSP_WAIT_FORMAT:
 			if(priv->dsp_is_started)
-			{
-				ret = audiodsp_get_audioinfo(priv);
-			}
+				{
+				struct audio_info *audio_format;
+				int ch = 0;
+				audio_format = get_audio_info();
+				
+				wait_format_times++;
+				
+				if(wait_format_times>100){
+					int audio_info = DSP_RD(DSP_AUDIO_FORMAT_INFO);
+					if(audio_info){
+						priv->frame_format.channel_num = audio_info&0xf;
+						if(priv->frame_format.channel_num)
+							priv->frame_format.valid |= CHANNEL_VALID;
+						priv->frame_format.data_width= (audio_info>>4)&0x3f;
+						if(priv->frame_format.data_width)
+							priv->frame_format.valid |= DATA_WIDTH_VALID;
+						priv->frame_format.sample_rate = (audio_info>>10);
+						if(priv->frame_format.sample_rate)
+							priv->frame_format.valid |= SAMPLE_RATE_VALID;
+						DSP_PRNT("warning::got info from mailbox failed,read from regiser\n");
+						ret = 0;
+					}else{
+						DSP_PRNT("dsp have not set the codec stream's format details,valid=%x\n",
+						priv->frame_format.valid);		
+						priv->format_wait_count++;
+						if(priv->format_wait_count > 5){						
+							if(audio_format->channels&&audio_format->sample_rate){
+								priv->frame_format.channel_num = audio_format->channels>2?2:audio_format->channels;
+								if(audio_format->channels == 1 && (priv->stream_fmt == MCODEC_FMT_AC3  \
+									||priv->stream_fmt == MCODEC_FMT_EAC3||priv->stream_fmt == MCODEC_FMT_DTS)) //ac3/dts decoder use Lt/Rt 2ch dmx mode
+                                	priv->frame_format.channel_num = 2; // force stereo
+								priv->frame_format.sample_rate = audio_format->sample_rate;
+								priv->frame_format.data_width = 16;
+								priv->frame_format.valid = CHANNEL_VALID|DATA_WIDTH_VALID|SAMPLE_RATE_VALID;
+								DSP_PRNT("we have not got format details from dsp,so use the info got from the header parsed instead\n");
+								ret = 0;
+							}else{
+								ret = -1;
+							}
+						}else{
+							ret=-1;
+						}
+					}
+				}else if(priv->frame_format.valid == (CHANNEL_VALID|DATA_WIDTH_VALID|SAMPLE_RATE_VALID)){
+					       DSP_PRNT("audio info from header: sr %d,ch %d\n",audio_format->sample_rate,audio_format->channels);       
+						if(audio_format->channels > 0 ){
+							if(audio_format->channels > 2)
+								ch = 2;
+							else
+								ch = audio_format->channels;
+							if(!AUDIOINFO_FROM_AUDIODSP(priv->stream_fmt)&&ch != priv->frame_format.channel_num){
+								DSP_PRNT(" ch num info from dsp and header not match,[dsp %d ch],[header %d ch]", \
+									priv->frame_format.channel_num,ch);
+								//priv->frame_format.channel_num = ch;
+							}	
+							
+						}
+                        /**
+                         * force to stereo for ac3/dts decoder
+                         * */
+						if(priv->frame_format.channel_num == 1 && (priv->stream_fmt == MCODEC_FMT_AC3 \
+							||priv->stream_fmt == MCODEC_FMT_EAC3||priv->stream_fmt == MCODEC_FMT_DTS)) //ac3/dts decoder use Lt/Rt 2ch dmx mode
+                        	priv->frame_format.channel_num = 2; // force stereo                         
+						if(!AUDIOINFO_FROM_AUDIODSP(priv->stream_fmt)&&audio_format->sample_rate&&audio_format->sample_rate != priv->frame_format.sample_rate){
+								DSP_PRNT(" sr num info from dsp and header not match,[dsp %d ],[header %d ]", \
+									priv->frame_format.sample_rate,audio_format->sample_rate);
+							//priv->frame_format.sample_rate  = audio_format->sample_rate;
+						}
+						DSP_PRNT("applied audio sr %d,ch num %d\n",priv->frame_format.sample_rate,priv->frame_format.channel_num);
+						
+						/*Reset the PLL. Added by GK*/
+						tsync_pcr_recover();
+				}
+				else{
+					ret = -EAGAIN;
+				}
+				}
 			else
-			{
-				ret = -1;
+				{
 				DSP_PRNT("Audio dsp have not started\n");
-			}
-			/*Reset the PLL. Added by GK*/
-			tsync_pcr_recover();			
+				}			
 			break;
+#else /*!defined(ENABLE_WAIT_FORMAT)*/
+		case AUDIODSP_DECODE_START:			
+			if(priv->dsp_is_started)
+				{
+				int waittime=0;
+				int ch = 0;
+				struct audio_info *audio_format;
+				dsp_codec_start(priv);
+				audio_format = get_audio_info();
+				while(!((priv->frame_format.valid & CHANNEL_VALID) &&
+					(priv->frame_format.valid & SAMPLE_RATE_VALID) &&
+					(priv->frame_format.valid & DATA_WIDTH_VALID)))
+					{
+					
+					waittime++;
+					if(waittime>100)
+					{
+						int audio_info = DSP_RD(DSP_AUDIO_FORMAT_INFO);
+						if(audio_info){
+							priv->frame_format.channel_num = audio_info&0xf;
+							if(priv->frame_format.channel_num)
+								priv->frame_format.valid |= CHANNEL_VALID;
+							priv->frame_format.data_width= (audio_info>>4)&0x3f;
+							if(priv->frame_format.data_width)
+								priv->frame_format.valid |= DATA_WIDTH_VALID;
+							priv->frame_format.sample_rate = (audio_info>>10);
+							if(priv->frame_format.sample_rate)
+								priv->frame_format.valid |= SAMPLE_RATE_VALID;
+							DSP_PRNT("warning::got info from mailbox failed,read from regiser\n");
+							continue;
+						}
+						DSP_PRNT("dsp have not set the codec stream's format details,valid=%x\n",
+						priv->frame_format.valid);		
+						priv->format_wait_count++;
+						if(priv->format_wait_count > 5){
+							
+							if(audio_format->channels&&audio_format->sample_rate){
+								priv->frame_format.channel_num = audio_format->channels>2?2:audio_format->channels;
+								priv->frame_format.sample_rate = audio_format->sample_rate;
+								priv->frame_format.data_width = 16;
+								priv->frame_format.valid = CHANNEL_VALID|DATA_WIDTH_VALID|SAMPLE_RATE_VALID;
+								DSP_PRNT("we have not got format details from dsp,so use the info got from the header parsed instead\n");
+								ret = 0;
+								break;
+							}
+						}
+						ret=-1;
+						break;
+					}
+					msleep(10);/*wait codec start and decode the format*/
+					}
+				/* check the info got from dsp with the info parsed from header,we use the header info as the base */
+				if(priv->frame_format.valid == (CHANNEL_VALID|DATA_WIDTH_VALID|SAMPLE_RATE_VALID)){
+					       DSP_PRNT("audio info from header: sr %d,ch %d\n",audio_format->sample_rate,audio_format->channels);
+						if(audio_format->channels > 0 ){
+							if(audio_format->channels > 2)
+								ch = 2;
+							else
+								ch = audio_format->channels;
+							if(ch != priv->frame_format.channel_num){
+								DSP_PRNT(" ch num info from dsp and header not match,[dsp %d ch],[header %d ch]", \
+									priv->frame_format.channel_num,ch);
+								priv->frame_format.channel_num = ch;
+							}	
+							
+						}
+						if(audio_format->sample_rate&&audio_format->sample_rate != priv->frame_format.sample_rate){
+								DSP_PRNT(" sr num info from dsp and header not match,[dsp %d ],[header %d ]", \
+									priv->frame_format.sample_rate,audio_format->sample_rate);
+							priv->frame_format.sample_rate  = audio_format->sample_rate;
+						}
+						DSP_PRNT("applied audio sr %d,ch num %d\n",priv->frame_format.sample_rate,priv->frame_format.channel_num);
+				}
+				/*Reset the PLL. Added by GK*/
+				tsync_pcr_recover();
+				}
+			else
+				{
+				DSP_PRNT("Audio dsp have not started\n");
+				}			
+			break;
+#endif /*ENABLE_WAIT_FORMAT*/
 		case AUDIODSP_DECODE_STOP:
 			if(priv->dsp_is_started)
 				{
@@ -357,9 +428,7 @@ static long audiodsp_ioctl(struct file *file, unsigned int cmd,
 			a_cmd=(struct audiodsp_cmd *)args;
 		//	DSP_PRNT("register firware,%d,%s\n",a_cmd->fmt,a_cmd->data);
 			len=a_cmd->data_len>64?64:a_cmd->data_len;
-			if (copy_from_user(name,a_cmd->data,len)) {
-				return -EFAULT;
-			}
+			copy_from_user(name,a_cmd->data,len);
 			name[len]='\0';
 			ret=audiodsp_microcode_register(priv,
 								a_cmd->fmt,
@@ -397,12 +466,12 @@ static long audiodsp_ioctl(struct file *file, unsigned int cmd,
 			*val=dsp_codec_get_current_pts(priv);
 			break;
                 case AUDIODSP_LOOKUP_APTS:
-                    	{
-                        	u32 pts, offset;
-                        	offset=*val;
-                        	pts_lookup_offset(PTS_TYPE_AUDIO, offset, &pts, 300);
-                        	*val=pts;
-                    	}
+                {
+                        u32 pts, offset;
+                        offset=*val;
+                        pts_lookup_offset(PTS_TYPE_AUDIO, offset, &pts, 300);
+                        *val=pts;
+                }
                         break;
 		case AUDIODSP_GET_FIRST_PTS_FLAG:
 			if(priv->stream_fmt == MCODEC_FMT_COOK || priv->stream_fmt == MCODEC_FMT_RAAC)
@@ -473,39 +542,14 @@ static long audiodsp_ioctl(struct file *file, unsigned int cmd,
 			
 			break;
 
-		case AUDIODSP_DROP_PCMDATA:
+                case AUDIODSP_AUTOMUTE_ON:
+                        tsync_set_automute_on(1);
+                        break;
 
-			if(get_user(drop_size, (unsigned long __user *)args)){
-				printk("Get pcm drop size from user space fault! \n");
-				return -EFAULT;
-			}
-			audiodsp_drop_pcm(drop_size);
-		break;
+                case AUDIODSP_AUTOMUTE_OFF:
+                        tsync_set_automute_on(0);
+                        break;
 			
-    case AUDIODSP_AUTOMUTE_ON:
-         tsync_set_automute_on(1);
-    break;
-
-    case AUDIODSP_AUTOMUTE_OFF:
-         tsync_set_automute_on(0);
-		break;
-
-    case AUDIODSP_GET_PCM_LEVEL:
-        {
-            int len = dsp_codec_get_bufer_data_len(priv);
-            if(put_user(len, (unsigned long __user *)args)){
-    			printk("Put pcm level to user space fault! \n");
-    			return -EFAULT;
-    		}
-            break;
-        }
-        
-    case AUDIODSP_SET_PCM_BUF_SIZE:
-        if ((int)args > 0) {
-            priv->stream_buffer_mem_size = args;
-        }
-        break;
-        
 		default:
 			DSP_PRNT("unsupport cmd number%d\n",cmd);
 			ret=-1;
@@ -516,14 +560,11 @@ static long audiodsp_ioctl(struct file *file, unsigned int cmd,
 static int audiodsp_release(struct inode *node, struct file *file)
 {
 	DSP_PRNT("dsp_release\n");
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6	
-	switch_mod_gate_by_type(MOD_VDEC, 0);
-	switch_mod_gate_by_type(MOD_MEDIA_CPU, 0);
-#endif
-
 	audiodsp_allow_sleep();
 	return 0;
 }
+
+
 
 ssize_t audiodsp_read(struct file * file, char __user * ubuf, size_t size,
 		  loff_t * loff)
@@ -597,8 +638,7 @@ ssize_t audiodsp_read(struct file * file, char __user * ubuf, size_t size,
 	return len;
 error_out:
 	mutex_unlock(&priv->stream_buffer_mutex);
-    printk("audiodsp_read failed\n");
-	return -EINVAL;
+	return 0;
 }
 
 ssize_t audiodsp_write(struct file * file, const char __user * ubuf, size_t size,
@@ -617,6 +657,7 @@ ssize_t audiodsp_write(struct file * file, const char __user * ubuf, size_t size
 	
 	return size;
 }
+
 
 const static struct file_operations audiodsp_fops = {
 	.owner = THIS_MODULE,
@@ -681,20 +722,7 @@ static ssize_t codec_fmt_show(struct class* cla, struct class_attribute* attr, c
     ret = sprintf(buf, "The codec Format %d\n", priv->stream_fmt);
     return ret;
 }
-#if 0
-static ssize_t codec_mips_show(struct class* cla, struct class_attribute* attr, char* buf)
-{
-    size_t ret = 0;
-    struct audiodsp_priv *priv = audiodsp_privdata();
-    if(priv->stream_fmt < sizeof(audiodsp_mips)){    
-        ret = sprintf(buf, "%d\n", audiodsp_mips[__builtin_ffs(priv->stream_fmt)]);
-    }
-    else{
-        ret = sprintf(buf, "%d\n", 200000);
-    }
-    return ret;
-}
-#endif
+
 static ssize_t codec_fatal_err_show(struct class* cla, struct class_attribute* attr, char* buf)
 {
     struct audiodsp_priv *priv = audiodsp_privdata();
@@ -725,7 +753,7 @@ static ssize_t dsp_working_status_show(struct class* cla, struct class_attribute
     pbuf += sprintf(pbuf, "\tdsp jeffies  0x%lx\n", DSP_RD(DSP_JIFFIES));
     pbuf += sprintf(pbuf, "\tdsp pcm wp  0x%lx\n", DSP_RD(DSP_DECODE_OUT_WD_ADDR));
     pbuf += sprintf(pbuf, "\tdsp pcm rp  0x%lx\n", DSP_RD(DSP_DECODE_OUT_RD_ADDR));
-    pbuf += sprintf(pbuf, "\tdsp pcm buffer level  0x%i\n", dsp_codec_get_bufer_data_len(priv));
+	pbuf += sprintf(pbuf, "\tdsp pcm buffer level  0x%lx\n", dsp_codec_get_bufer_data_len(priv));
     pbuf += sprintf(pbuf, "\tdsp pcm buffered size  0x%lx\n", DSP_RD(DSP_BUFFERED_LEN));
     pbuf += sprintf(pbuf, "\tdsp es read offset  0x%lx\n", DSP_RD(DSP_AFIFO_RD_OFFSET1));
 
@@ -824,8 +852,8 @@ static ssize_t ac3_drc_control_show(struct class*cla, struct class_attribute* at
 	char *drcmode[] = {"CUSTOM_0","CUSTOM_1","LINE","RF"};
 	char *pbuf = buf;
 	pbuf += sprintf(pbuf, "\tdd+ drc mode : %s\n", drcmode[ac3_drc_control&0x3]);
-	pbuf += sprintf(pbuf, "\tdd+ drc high cut scale : %d%%\n", (ac3_drc_control>>DRC_HIGH_CUT_BIT)&0xff);
-	pbuf += sprintf(pbuf, "\tdd+ drc low boost scale : %d%%\n", (ac3_drc_control>>DRC_LOW_BST_BIT)&0xff);
+	pbuf += sprintf(pbuf, "\tdd+ drc high cut scale : %d%\n", (ac3_drc_control>>DRC_HIGH_CUT_BIT)&0xff);
+	pbuf += sprintf(pbuf, "\tdd+ drc low boost scale : %d%\n", (ac3_drc_control>>DRC_LOW_BST_BIT)&0xff);
 	return (pbuf-buf);
 }
 static ssize_t ac3_drc_control_store(struct class* class, struct class_attribute* attr,
@@ -849,119 +877,111 @@ static ssize_t ac3_drc_control_store(struct class* class, struct class_attribute
  	else if(strncmp(tmpbuf, "drchighcutscale", 15)==0){
         val=simple_strtoul(buf+i+1, NULL, 16); 	
 		val = val&0xff;
-		printk("drc high cut scale set to %d%%\n",val);
+		printk("drc high cut scale set to %d%\n",val);
 		ac3_drc_control = (ac3_drc_control&(~(0xff<<DRC_HIGH_CUT_BIT)))|(val<<DRC_HIGH_CUT_BIT);
  	}
  	else if(strncmp(tmpbuf, "drclowboostscale", 16)==0){
         val=simple_strtoul(buf+i+1, NULL, 16); 	
 		val = val&0xff;
-		printk("drc low boost scale set to %d%%\n",val);
+		printk("drc low boost scale set to %d%\n",val);
 		ac3_drc_control = (ac3_drc_control&(~(0xff<<DRC_LOW_BST_BIT)))|(val<<DRC_LOW_BST_BIT);
  	}
 	else
 		printk("invalid args\n");
 	return count;
-
 }
-static ssize_t dts_dec_control_show(struct class*cla, struct class_attribute* attr, char* buf)
+
+//------------------------------------------------
+static ssize_t file_read_end_flag_show(struct class*cla, struct class_attribute* attr, char* buf)
 {
-	char *dmxmode[] = {"Lo/Ro","Lt/Rt"};
-	char *dialnorm[] = {"disable","enable"};	
-	char *pbuf = buf;
-	pbuf += sprintf(pbuf, "\tdts  dmx mode : %s\n", dmxmode[(dts_dec_control>>DTS_DMX_MODE_BIT)&0x1]);
-	pbuf += sprintf(pbuf, "\tdts  drc scale : %d\n", (dts_dec_control>>DTS_DRC_SCALE_BIT)&0xff);
-	pbuf += sprintf(pbuf, "\tdts  dial norm : %s\n", dialnorm[(dts_dec_control>>DTS_DIAL_NORM_BIT)&0x1]);
+    char* pbuf = buf;
+    unsigned end_flag = DSP_RD(DSP_DECODE_OPTION);
+    end_flag = (end_flag & 0x00000018)>>3;
+    if(end_flag==0){
+	pbuf += sprintf(pbuf, "F_NEND\n");
+    }else if(end_flag==1){
+	pbuf += sprintf(pbuf, "F_END\n");
+    }else if(end_flag==2){
+	pbuf += sprintf(pbuf, "DSP_END\n");
+    }
+    return (pbuf-buf);
+}
+static ssize_t file_read_end_flag_store(struct class* class, struct class_attribute* attr,const char* buf, size_t count )
+{
+    unsigned decopt_reg;
+    unsigned end_flag = 0x0;
+    if(buf[0] == '0'){
+	end_flag = 0;	// not arrive at the end of file
+    }else if(buf[0] == '1'){
+	end_flag = 1;	// has arrived at the end of file
+    }else if(buf[0] == '2')
+	end_flag = 2;
+    decopt_reg = DSP_RD(DSP_DECODE_OPTION);
+    decopt_reg = (decopt_reg&(~0x00000018))| (end_flag<<3);
+    DSP_WD(DSP_DECODE_OPTION, decopt_reg);
+    printk("decopt_reg = 0x%x, end_flag = 0x%x\n", decopt_reg, end_flag);
+    return count;
+}
+static ssize_t pcm_left_len_show(struct class* cla, struct class_attribute* attr, char* buf)
+{
+	struct audiodsp_priv *priv = audiodsp_privdata();
+	char *pbuf = 	buf;
+	pbuf += sprintf(pbuf, "%d\n", dsp_codec_get_bufer_data_len(priv));
+	return (pbuf- buf);
+}
+static ssize_t format_changed_flag_show(struct class*cla, struct class_attribute* attr, char* buf)
+{
+	char* pbuf = buf;
+	unsigned end_flag = DSP_RD(DSP_DECODE_OPTION);
+	end_flag = (end_flag & 0x00000018)>>3;
+	if(format_change_flag==0){
+	   pbuf += sprintf(pbuf, "0\n");
+	}else if(format_change_flag==1){
+	   pbuf += sprintf(pbuf, "1\n");
+	}
 	return (pbuf-buf);
 }
-static ssize_t dts_dec_control_store(struct class* class, struct class_attribute* attr,
-   const char* buf, size_t count )
+
+static ssize_t format_changed_flag_store(struct class* class, struct class_attribute* attr,const char* buf, size_t count )
 {
-    char tmpbuf[128];
-	char *dmxmode[] = {"Lo/Ro","Lt/Rt"};
-	char *dialnorm[] = {"disable","enable"};		
-    int i=0;
-	unsigned val;
-    while((buf[i])&&(buf[i]!=',')&&(buf[i]!=' ')){
-        tmpbuf[i]=buf[i];
-        i++;    
+
+    if(buf[0] == '0'){
+	   format_change_flag = 0;	// not arrive at the end of file
+    }else if(buf[0] == '1'){
+	   format_change_flag = 1;	// has arrived at the end of file
     }
-    tmpbuf[i]=0;
- 	if(strncmp(tmpbuf, "dtsdmxmode", 10)==0){
-        val=simple_strtoul(buf+i+1, NULL, 16); 
-		val = val&0x1;
-		printk("dts dmx mode set to %s\n",dmxmode[val]);
-		dts_dec_control = (dts_dec_control&(~1))|val;
- 	}
- 	else if(strncmp(tmpbuf, "dtsdrcscale", 11)==0){
-        val=simple_strtoul(buf+i+1, NULL, 16);
-		val = val&0xff;
-		printk("dts drc  scale set to %d\n",val);
-		dts_dec_control = (dts_dec_control&(~(0xff<<DTS_DRC_SCALE_BIT)))|(val<<DTS_DRC_SCALE_BIT);
- 	}
- 	else if(strncmp(tmpbuf, "dtsdialnorm", 11)==0){
-        val=simple_strtoul(buf+i+1, NULL, 16); 	
-		val = val&0x1;
-		printk("dts  dial norm : set to %s\n",dialnorm[val]);
-		dts_dec_control = (dts_dec_control&(~(0x1<<DTS_DIAL_NORM_BIT)))|(val<<DTS_DIAL_NORM_BIT);
- 	}
-	else
-		printk("invalid args\n");
-	return count;
-
+    return count;
 }
 
-static ssize_t dsp_debug_show(struct class*cla, struct class_attribute* attr, char* buf)
-{
-  char* pbuf = buf;
-  pbuf += sprintf(pbuf, "DSP Debug Flag: %s\n", (dsp_debug_flag==0)?"0 - OFF":"1 - ON");
-  return (pbuf-buf);
-}
-static ssize_t dsp_debug_store(struct class* class, struct class_attribute* attr,
-   const char* buf, size_t count )
-{
-  if(buf[0] == '0'){
-    dsp_debug_flag = 0;
-  }else if(buf[0] == '1'){
-    dsp_debug_flag = 1;
-  }
-  printk("DSP Debug Flag: %d\n", dsp_debug_flag);
-  return count;
-}
-
+//------------------------------------------------
 
 static struct class_attribute audiodsp_attrs[]={
     __ATTR_RO(codec_fmt),
-#ifdef CONFIG_ARCH_MESON1    
-    __ATTR_RO(codec_mips),
-#endif    
+   // __ATTR_RO(codec_mips),   //no need for M3
     __ATTR_RO(codec_fatal_err),
     __ATTR_RO(swap_buf_ptr),
     __ATTR_RO(dsp_working_status),
+    __ATTR_RO(pcm_left_len),
     __ATTR(digital_raw, S_IRUGO | S_IWUSR, digital_raw_show, digital_raw_store),
-		
-    __ATTR(dec_option, S_IRUGO | S_IWUSR, dec_option_show, dec_option_store),
-		
-    __ATTR(print_flag, S_IRUGO | S_IWUSR, print_flag_show, print_flag_store),
-		
-    __ATTR(ac3_drc_control, S_IRUGO | S_IWUSR, ac3_drc_control_show, ac3_drc_control_store),
-    __ATTR(dsp_debug, S_IRUGO | S_IWUSR, dsp_debug_show, dsp_debug_store),
-    __ATTR(dts_dec_control, S_IRUGO | S_IWUSR, dts_dec_control_show, dts_dec_control_store),    
+	__ATTR(dec_option, S_IRUGO | S_IWUSR, dec_option_show, dec_option_store),    
+	__ATTR(print_flag, S_IRUGO | S_IWUSR, print_flag_show, print_flag_store),	
+	__ATTR(ac3_drc_control, S_IRUGO | S_IWUSR, ac3_drc_control_show, ac3_drc_control_store),
+    __ATTR(fread_end_flag, S_IRUGO | S_IWUSR, file_read_end_flag_show, file_read_end_flag_store),
+    __ATTR(format_change_flag, S_IRUGO | S_IWUSR,  format_changed_flag_show, format_changed_flag_store),
     __ATTR_NULL
 };
 
 #ifdef CONFIG_PM
 static int audiodsp_suspend(struct device* dev, pm_message_t state)
 {
-#if 0	 
      struct audiodsp_priv *priv = audiodsp_privdata();
     if(wake_lock_active(&priv->wakelock)){
         return -1; // please stop dsp first
     }
-#endif
     pm_state.event = state.event;
     if(state.event == PM_EVENT_SUSPEND){
         // should sleep cpu2 here after RevC chip
-        //msleep(50);
+        msleep(50);
     }
     printk("audiodsp suspend\n");
     return 0;
@@ -995,7 +1015,6 @@ int audiodsp_probe(void )
 
 	int res=0;
 	struct audiodsp_priv *priv;
-    dsp_debug_flag = 1;
 	priv=kmalloc(sizeof(struct audiodsp_priv),GFP_KERNEL);
 	if(priv==NULL)
 		{

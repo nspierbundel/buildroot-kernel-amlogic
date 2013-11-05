@@ -11,7 +11,6 @@
 
 #ifndef __PCMENC_STREAM_H__
 #define __PCMENC_STREAM_H__
-#include <asm/uaccess.h>
 
 
 typedef struct pcm51_encoded_info_s
@@ -51,8 +50,7 @@ extern int pcmenc_stream_deinit(void);
 /* read  data out of FIFO, the minimum of the FIFO's content and size will be read, if the FIFO is empty, read will be failed 
  * return value: on success, the number of bytes read are returned, othewise, 0 is returned
  * */
-extern int  pcmenc_stream_read(char __user *buffer, int size);
-
+extern int pcmenc_stream_read(unsigned char *buf, int size);
 
 #endif
 

@@ -6,6 +6,7 @@
 #define CHANNEL_VALID 			(1<<2)	
 #define SAMPLE_RATE_VALID     	(1<<3)	
 #define DATA_WIDTH_VALID     	(1<<4)	
+
 struct digit_raw_output_info
 {
 	int	framelength;
@@ -40,7 +41,6 @@ struct digit_raw_output_info
 
 struct frame_fmt
 {
-
     int valid;
     int sub_fmt;
     int channel_num;
