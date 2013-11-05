@@ -22,6 +22,7 @@
 #ifndef VC1_MC_H
 #define VC1_MC_H
 
-extern const u32 vc1_mc[];
+#define MicroCode vc1_mc
+#include "vc1_vc1_linux.h"
 
 #endif

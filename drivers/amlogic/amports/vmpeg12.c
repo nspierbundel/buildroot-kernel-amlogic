@@ -25,8 +25,6 @@
 #include <linux/interrupt.h>
 #include <linux/timer.h>
 #include <linux/platform_device.h>
-#include <mach/am_regs.h>
-#include <plat/io.h>
 #include <linux/amports/ptsserv.h>
 #include <linux/amports/amstream.h>
 #include <linux/amports/canvas.h>
@@ -34,14 +32,7 @@
 #include <linux/amports/vfp.h>
 #include <linux/amports/vframe_provider.h>
 #include <linux/amports/vframe_receiver.h>
-
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
-
-#include "vdec_reg.h"
-#include "vmpeg12.h"
+#include <mach/am_regs.h>
 
 #ifdef CONFIG_AM_VDEC_MPEG12_LOG
 #define AMLOG
@@ -104,10 +95,6 @@ MODULE_AMLOG(LOG_LEVEL_ERROR, 0, LOG_LEVEL_DESC, LOG_DEFAULT_MASK_DESC);
 #define DEC_CONTROL_FLAG_FORCE_2500_544_576_INTERLACE  0x0010
 #define DEC_CONTROL_FLAG_FORCE_2500_480_576_INTERLACE  0x0020
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-#define NV21
-#endif
-#define CCBUF_SIZE		5*1024
 
 static vframe_t *vmpeg_vf_peek(void*);
 static vframe_t *vmpeg_vf_get(void*);
@@ -150,8 +137,8 @@ static u32 dec_control = 0;
 static u32 frame_width, frame_height, frame_dur, frame_prog;
 static struct timer_list recycle_timer;
 static u32 stat;
-static u32 buf_start, buf_size, ccbuf_phyAddress;
-static DEFINE_SPINLOCK(lock);
+static u32 buf_start, buf_size;
+static DEFINE_SPINLOCK(lock); 
 
 /* for error handling */
 static s32 frame_force_skip_flag = 0;
@@ -160,11 +147,7 @@ static s32 error_frame_skip_level = 0;
 static inline u32 index2canvas(u32 index)
 {
     const u32 canvas_tab[4] = {
-#ifdef NV21
-        0x010100, 0x030302, 0x050504, 0x070706
-#else
         0x020100, 0x050403, 0x080706, 0x0b0a09
-#endif
     };
 
     return canvas_tab[index];
@@ -178,17 +161,20 @@ static void set_frame_info(vframe_t *vf)
     bool first = (frame_width == 0) && (frame_height == 0);
 #endif
 
-    vf->width  = frame_width = READ_VREG(MREG_PIC_WIDTH);
-    vf->height = frame_height = READ_VREG(MREG_PIC_HEIGHT);
-
+    vf->width  = frame_width = READ_MPEG_REG(MREG_PIC_WIDTH);
+    vf->height = frame_height = READ_MPEG_REG(MREG_PIC_HEIGHT);
+	
+    if(frame_height==1088)
+    vf->height=frame_height=1080;
+	
     if (frame_dur > 0) {
         vf->duration = frame_dur;
     } else {
         vf->duration = frame_dur =
-                           frame_rate_tab[(READ_VREG(MREG_SEQ_INFO) >> 4) & 0xf];
+                           frame_rate_tab[(READ_MPEG_REG(MREG_SEQ_INFO) >> 4) & 0xf];
     }
 
-    ar_bits = READ_VREG(MREG_SEQ_INFO) & 0xf;
+    ar_bits = READ_MPEG_REG(MREG_SEQ_INFO) & 0xf;
 
     if (ar_bits == 0x2) {
         vf->ratio_control = 0xc0 << DISP_RATIO_ASPECT_RATIO_BIT;
@@ -207,7 +193,7 @@ static void set_frame_info(vframe_t *vf)
                    frame_width,
                    frame_height,
                    frame_dur,
-                   frame_rate_tab[(READ_VREG(MREG_SEQ_INFO) >> 4) & 0xf]);
+                   frame_rate_tab[(READ_MPEG_REG(MREG_SEQ_INFO) >> 4) & 0xf]);
 }
 
 static bool error_skip(u32 info, vframe_t *vf)
@@ -239,21 +225,16 @@ static irqreturn_t vmpeg12_isr(int irq, void *dev_id)
     vframe_t *vf;
     ulong flags;
 
-    WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
 
-    reg = READ_VREG(MREG_BUFFEROUT);
+    reg = READ_MPEG_REG(MREG_BUFFEROUT);
 
-	if ((reg >> 16) == 0xfe)
-	{	
-		wakeup_userdata_poll(reg & 0xffff, ccbuf_phyAddress, CCBUF_SIZE);
-		WRITE_VREG(MREG_BUFFEROUT, 0);
-	}
-	else   if (reg) {
-        info = READ_VREG(MREG_PIC_INFO);
-        offset = READ_VREG(MREG_FRAME_OFFSET);
+    if (reg) {
+        info = READ_MPEG_REG(MREG_PIC_INFO);
+        offset = READ_MPEG_REG(MREG_FRAME_OFFSET);
 
-        if ((((info & PICINFO_TYPE_MASK) == PICINFO_TYPE_I) || ((info & PICINFO_TYPE_MASK) == PICINFO_TYPE_P))
-             && (pts_lookup_offset(PTS_TYPE_VIDEO, offset, &pts, 0) == 0)) {
+        if (((info & PICINFO_TYPE_MASK) == PICINFO_TYPE_I) &&
+            (pts_lookup_offset(PTS_TYPE_VIDEO, offset, &pts, 0) == 0)) {
             pts_valid = 1;
         }
 
@@ -296,18 +277,15 @@ static irqreturn_t vmpeg12_isr(int irq, void *dev_id)
         if (frame_prog & PICINFO_PROG) {
             u32 index = ((reg & 7) - 1) & 3;
 
-            seqinfo = READ_VREG(MREG_SEQ_INFO);
+            seqinfo = READ_MPEG_REG(MREG_SEQ_INFO);
 
             vf = vfq_pop(&newframe_q);
 
             set_frame_info(vf);
 
             vf->index = index;
-#ifdef NV21
-            vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD | VIDTYPE_VIU_NV21;
-#else
             vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD;
-#endif
+
             if ((seqinfo & SEQINFO_EXT_AVAILABLE) && (seqinfo & SEQINFO_PROG)) {
                 if (info & PICINFO_RPT_FIRST) {
                     if (info & PICINFO_TOP_FIRST) {
@@ -325,7 +303,6 @@ static irqreturn_t vmpeg12_isr(int irq, void *dev_id)
 
             vf->duration += vf->duration_pulldown;
             vf->canvas0Addr = vf->canvas1Addr = index2canvas(index);
-            vf->orientation = 0 ;
             vf->pts = (pts_valid) ? pts : 0;
 
             vfbuf_use[index]++;
@@ -351,14 +328,10 @@ static irqreturn_t vmpeg12_isr(int irq, void *dev_id)
             vf->index = index;
             vf->type = (info & PICINFO_TOP_FIRST) ?
                        VIDTYPE_INTERLACE_TOP : VIDTYPE_INTERLACE_BOTTOM;
-#ifdef NV21
-            vf->type |= VIDTYPE_VIU_NV21;
-#endif
             vf->duration >>= 1;
             vf->duration_pulldown = (info & PICINFO_RPT_FIRST) ?
                                     vf->duration >> 1 : 0;
             vf->duration += vf->duration_pulldown;
-            vf->orientation = 0 ;
             vf->canvas0Addr = vf->canvas1Addr = index2canvas(index);
             vf->pts = (pts_valid) ? pts : 0;
 
@@ -374,22 +347,12 @@ static irqreturn_t vmpeg12_isr(int irq, void *dev_id)
             set_frame_info(vf);
 
             vf->index = index;
-#if MESON_CPU_TYPE == MESON_CPU_TYPE_MESON6
-            /* it is just a patch for display dithering, I do NOT find the root cause */
             vf->type = (info & PICINFO_TOP_FIRST) ?
                        VIDTYPE_INTERLACE_TOP : VIDTYPE_INTERLACE_BOTTOM;
-#else
-            vf->type = (info & PICINFO_TOP_FIRST) ?
-                       VIDTYPE_INTERLACE_BOTTOM : VIDTYPE_INTERLACE_TOP;
-#endif
-#ifdef NV21
-            vf->type |= VIDTYPE_VIU_NV21;
-#endif
             vf->duration >>= 1;
             vf->duration_pulldown = (info & PICINFO_RPT_FIRST) ?
                                     vf->duration >> 1 : 0;
             vf->duration += vf->duration_pulldown;
-            vf->orientation = 0 ;
             vf->canvas0Addr = vf->canvas1Addr = index2canvas(index);
             vf->pts = 0;
 
@@ -398,10 +361,10 @@ static irqreturn_t vmpeg12_isr(int irq, void *dev_id)
             } else {
                 vfq_push(&display_q, vf);
                 vf_notify_receiver(PROVIDER_NAME,VFRAME_EVENT_PROVIDER_VFRAME_READY,NULL);
-            }            
+            }
         }
 
-        WRITE_VREG(MREG_BUFFEROUT, 0);
+        WRITE_MPEG_REG(MREG_BUFFEROUT, 0);
     }
 
     return IRQ_HANDLED;
@@ -458,11 +421,11 @@ static void vmpeg_put_timer_func(unsigned long arg)
 {
     struct timer_list *timer = (struct timer_list *)arg;
 
-    while (!vfq_empty(&recycle_q) && (READ_VREG(MREG_BUFFERIN) == 0)) {
+    while (!vfq_empty(&recycle_q) && (READ_MPEG_REG(MREG_BUFFERIN) == 0)) {
         vframe_t *vf = vfq_pop(&recycle_q);
 
         if (--vfbuf_use[vf->index] == 0) {
-            WRITE_VREG(MREG_BUFFERIN, vf->index + 1);
+            WRITE_MPEG_REG(MREG_BUFFERIN, vf->index + 1);
         }
 
         vfq_push(&newframe_q, vf);
@@ -482,7 +445,7 @@ int vmpeg12_dec_status(struct vdec_status *vstatus)
     } else {
         vstatus->fps = 96000;
     }
-    vstatus->error_count = READ_VREG(AV_SCRATCH_C);
+    vstatus->error_count = READ_MPEG_REG(AV_SCRATCH_C);
     vstatus->status = stat;
 
     return 0;
@@ -521,16 +484,6 @@ static void vmpeg12_canvas_init(void)
 
     for (i = 0; i < 4; i++) {
         if (((buf_start + i * decbuf_size + 7) >> 3) == disp_addr) {
-#ifdef NV21
-            canvas_config(2 * i + 0,
-                          buf_start + 4 * decbuf_size,
-                          canvas_width, canvas_height,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-            canvas_config(2 * i + 1,
-                          buf_start + 4 * decbuf_size + decbuf_y_size,
-                          canvas_width, canvas_height / 2,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#else
             canvas_config(3 * i + 0,
                           buf_start + 4 * decbuf_size,
                           canvas_width, canvas_height,
@@ -543,18 +496,7 @@ static void vmpeg12_canvas_init(void)
                           buf_start + 4 * decbuf_size + decbuf_y_size + decbuf_uv_size,
                           canvas_width / 2, canvas_height / 2,
                           CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#endif
         } else {
-#ifdef NV21
-            canvas_config(2 * i + 0,
-                          buf_start + i * decbuf_size,
-                          canvas_width, canvas_height,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-            canvas_config(2 * i + 1,
-                          buf_start + i * decbuf_size + decbuf_y_size,
-                          canvas_width, canvas_height / 2,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#else
             canvas_config(3 * i + 0,
                           buf_start + i * decbuf_size,
                           canvas_width, canvas_height,
@@ -567,62 +509,45 @@ static void vmpeg12_canvas_init(void)
                           buf_start + i * decbuf_size + decbuf_y_size + decbuf_uv_size,
                           canvas_width / 2, canvas_height / 2,
                           CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#endif
         }
     }
 
-	ccbuf_phyAddress = buf_start + 4 * decbuf_size;
-    WRITE_VREG(MREG_CO_MV_START, buf_start + 4 * decbuf_size + CCBUF_SIZE);
+    WRITE_MPEG_REG(MREG_CO_MV_START, buf_start + 4 * decbuf_size);
 
 }
 
 static void vmpeg12_prot_init(void)
 {
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-    WRITE_VREG(DOS_SW_RESET0, (1<<7) | (1<<6));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-#else
     WRITE_MPEG_REG(RESET0_REGISTER, RESET_IQIDCT | RESET_MC);
-#endif
 
     vmpeg12_canvas_init();
 
-#ifdef NV21
-    WRITE_VREG(AV_SCRATCH_0, 0x010100);
-    WRITE_VREG(AV_SCRATCH_1, 0x030302);
-    WRITE_VREG(AV_SCRATCH_2, 0x050504);
-    WRITE_VREG(AV_SCRATCH_3, 0x070706);
-#else
-    WRITE_VREG(AV_SCRATCH_0, 0x020100);
-    WRITE_VREG(AV_SCRATCH_1, 0x050403);
-    WRITE_VREG(AV_SCRATCH_2, 0x080706);
-    WRITE_VREG(AV_SCRATCH_3, 0x0b0a09);
-#endif
+    WRITE_MPEG_REG(AV_SCRATCH_0, 0x020100);
+    WRITE_MPEG_REG(AV_SCRATCH_1, 0x050403);
+    WRITE_MPEG_REG(AV_SCRATCH_2, 0x080706);
+    WRITE_MPEG_REG(AV_SCRATCH_3, 0x0b0a09);
 
     /* set to mpeg1 default */
-    WRITE_VREG(MPEG1_2_REG, 0);
+    WRITE_MPEG_REG(MPEG1_2_REG, 0);
     /* disable PSCALE for hardware sharing */
-    WRITE_VREG(PSCALE_CTRL, 0);
+    WRITE_MPEG_REG(PSCALE_CTRL, 0);
     /* for Mpeg1 default value */
-    WRITE_VREG(PIC_HEAD_INFO, 0x380);
+    WRITE_MPEG_REG(PIC_HEAD_INFO, 0x380);
     /* disable mpeg4 */
-    WRITE_VREG(M4_CONTROL_REG, 0);
+    WRITE_MPEG_REG(M4_CONTROL_REG, 0);
     /* clear mailbox interrupt */
-    WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
     /* clear buffer IN/OUT registers */
-    WRITE_VREG(MREG_BUFFERIN, 0);
-    WRITE_VREG(MREG_BUFFEROUT, 0);
+    WRITE_MPEG_REG(MREG_BUFFERIN, 0);
+    WRITE_MPEG_REG(MREG_BUFFEROUT, 0);
     /* set reference width and height */
     if ((frame_width != 0) && (frame_height != 0)) {
-        WRITE_VREG(MREG_CMD, (frame_width << 16) | frame_height);
+        WRITE_MPEG_REG(MREG_CMD, (frame_width << 16) | frame_height);
     } else {
-        WRITE_VREG(MREG_CMD, 0);
+        WRITE_MPEG_REG(MREG_CMD, 0);
     }
     /* clear error count */
-    WRITE_VREG(MREG_ERROR_COUNT, 0);
-#ifdef NV21
-    SET_VREG_MASK(MDEC_PIC_DC_CTRL, 1<<17);
-#endif
+    WRITE_MPEG_REG(MREG_ERROR_COUNT, 0);
 }
 
 static void vmpeg12_local_init(void)

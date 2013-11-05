@@ -29,25 +29,17 @@
 #include <linux/mm.h>
 #include <linux/major.h>
 #include <linux/slab.h>
-#include <linux/mutex.h>
 #include <linux/platform_device.h>
-#include <mach/am_regs.h>
-#include <plat/io.h>
-
+#include <linux/mutex.h>
 #include <linux/amports/jpegdec.h>
 #include <linux/amports/canvas.h>
 
 #include <asm/uaccess.h>
-
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
+#include <mach/am_regs.h>
 
 #include "amvdec.h"
 #include "jpegdec_mc.h"
 #include "streambuf.h"
-#include "vdec_reg.h"
 
 #define DEVICE_NAME "amjpegdec"
 #define DRIVER_NAME "amjpegdec"
@@ -105,12 +97,12 @@ static jpegdec_mem_info_t jegdec_mem_info;
 
 static irqreturn_t jpegdec_isr(int irq, void *dev_id)
 {
-    WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
 
     if ((dec->state & JPEGDEC_STAT_INFO_READY) == 0) {
-        dec->info.width = READ_VREG(JPEG_PIC_WIDTH);
-        dec->info.height = READ_VREG(JPEG_PIC_HEIGHT);
-        dec->info.comp_num = READ_VREG(JPEG_INFO) >> 1;
+        dec->info.width = READ_MPEG_REG(JPEG_PIC_WIDTH);
+        dec->info.height = READ_MPEG_REG(JPEG_PIC_HEIGHT);
+        dec->info.comp_num = READ_MPEG_REG(JPEG_INFO) >> 1;
 
         pr_dbg("ucode report picture size %dx%d, comp_num %d\n",
                dec->info.width, dec->info.height, dec->info.comp_num);
@@ -121,7 +113,7 @@ static irqreturn_t jpegdec_isr(int irq, void *dev_id)
             dec->state |= JPEGDEC_STAT_INFO_READY | JPEGDEC_STAT_WAIT_DECCONFIG;
         }
     } else {
-        unsigned r = READ_VREG(JPEG_DECODE_START);
+        unsigned r = READ_MPEG_REG(JPEG_DECODE_START);
 
         dec->state &= ~JPEGDEC_STAT_WAIT_DATA;
 
@@ -144,27 +136,15 @@ static int _init_dec(jpegdec_t *d)
 
     amvdec_enable();
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-    WRITE_VREG(DOS_SW_RESET0, (1<<11));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-#else
     WRITE_MPEG_REG(RESET0_REGISTER, RESET_VCPU);
-#endif
-
-    WRITE_VREG(ASSIST_AMR1_INT0, 0x1);
-    WRITE_VREG(ASSIST_AMR1_INT1, 0xf);
-    WRITE_VREG(ASSIST_AMR1_INT2, 0x8);
-    WRITE_VREG(ASSIST_AMR1_INT3, 0xa);
-    WRITE_VREG(ASSIST_AMR1_INT4, 0x3);
-    WRITE_VREG(ASSIST_AMR1_INT5, 0x9);
-    WRITE_VREG(ASSIST_AMR1_INT6, 0x4);
-
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-    WRITE_VREG(DOS_SW_RESET0, (1<<11) | (1<<7) | (1<<6));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-#else
+    WRITE_MPEG_REG(ASSIST_AMR1_INT0, 0x1);
+    WRITE_MPEG_REG(ASSIST_AMR1_INT1, 0xf);
+    WRITE_MPEG_REG(ASSIST_AMR1_INT2, 0x8);
+    WRITE_MPEG_REG(ASSIST_AMR1_INT3, 0xa);
+    WRITE_MPEG_REG(ASSIST_AMR1_INT4, 0x3);
+    WRITE_MPEG_REG(ASSIST_AMR1_INT5, 0x9);
+    WRITE_MPEG_REG(ASSIST_AMR1_INT6, 0x4);
     WRITE_MPEG_REG(RESET0_REGISTER, RESET_VCPU | RESET_IQIDCT | RESET_MC);
-#endif
 
     if (amvdec_loadmc(jpegdec_mc) < 0) {
         amvdec_disable();
@@ -173,20 +153,16 @@ static int _init_dec(jpegdec_t *d)
         return -EBUSY;
     }
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-    WRITE_VREG(DOS_SW_RESET0, (1<<11) | (1<<10) | (1<<7) | (1<<6));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-#else
     WRITE_MPEG_REG(RESET0_REGISTER, RESET_VCPU | RESET_IQIDCT | RESET_MC);
     WRITE_MPEG_REG(RESET2_REGISTER, RESET_PSCALE);
-#endif
-    WRITE_VREG(PSCALE_RST, 0x7);
-    WRITE_VREG(PSCALE_RST, 0x0);
+    WRITE_MPEG_REG(PSCALE_RST, 0x7);
+    WRITE_MPEG_REG(PSCALE_RST, 0x0);
 
-    WRITE_VREG(JPEG_PIC_WIDTH, 0);
-    WRITE_VREG(JPEG_PIC_HEIGHT, 0);
-    WRITE_VREG(ASSIST_MBOX1_MASK, 1);
-    WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(JPEG_PIC_WIDTH, 0);
+    WRITE_MPEG_REG(JPEG_PIC_HEIGHT, 0);
+    WRITE_MPEG_REG(ASSIST_MBOX1_MASK, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(ASSIST_AMR1_INT8, 8);
 
     r = request_irq(INT_MAILBOX_1A, jpegdec_isr,
                     IRQF_SHARED, "jpegdec-irq", (void *)jpegdec_id);
@@ -220,13 +196,13 @@ static void _init_scaler(unsigned horz_step, unsigned vert_step)
         0x00404000
     };
 
-    WRITE_VREG(PSCALE_CTRL, 0xc000);
+    WRITE_MPEG_REG(PSCALE_CTRL, 0xc000);
 
     /* write filter coefs */
-    WRITE_VREG(PSCALE_BMEM_ADDR, 0);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, 0);
     for (i = 0; i < 33; i++) {
-        WRITE_VREG(PSCALE_BMEM_DAT, 0);
-        WRITE_VREG(PSCALE_BMEM_DAT, filt_coef[i]);
+        WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0);
+        WRITE_MPEG_REG(PSCALE_BMEM_DAT, filt_coef[i]);
     }
 
 #define BM_HORZ_Y_PHASE_STEP_OFFSET (36*2+1)
@@ -239,40 +215,40 @@ static void _init_scaler(unsigned horz_step, unsigned vert_step)
 #define BM_VERT_C_INI_INFO_OFFSET   (43*2)
 
     /* Y horizontal initial info */
-    WRITE_VREG(PSCALE_BMEM_ADDR, BM_HORZ_Y_INI_INFO_OFFSET);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x0008);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x60000000);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, BM_HORZ_Y_INI_INFO_OFFSET);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x0008);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x60000000);
 
     /* C horizontal initial info */
-    WRITE_VREG(PSCALE_BMEM_ADDR, BM_HORZ_C_INI_INFO_OFFSET);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x0008);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x60000000);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, BM_HORZ_C_INI_INFO_OFFSET);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x0008);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x60000000);
 
     /* Y vertical initial info */
-    WRITE_VREG(PSCALE_BMEM_ADDR, BM_VERT_Y_INI_INFO_OFFSET);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x0008);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x60000000);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, BM_VERT_Y_INI_INFO_OFFSET);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x0008);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x60000000);
 
     /* C vertical initial info */
-    WRITE_VREG(PSCALE_BMEM_ADDR, BM_VERT_C_INI_INFO_OFFSET);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x0008);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x60000000);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, BM_VERT_C_INI_INFO_OFFSET);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x0008);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x60000000);
 
     /* Y horizontal phase step */
-    WRITE_VREG(PSCALE_BMEM_ADDR, BM_HORZ_Y_PHASE_STEP_OFFSET);
-    WRITE_VREG(PSCALE_BMEM_DAT,  horz_step);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, BM_HORZ_Y_PHASE_STEP_OFFSET);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT,  horz_step);
 
     /* C horizontal phase step */
-    WRITE_VREG(PSCALE_BMEM_ADDR, BM_HORZ_C_PHASE_STEP_OFFSET);
-    WRITE_VREG(PSCALE_BMEM_DAT,  horz_step);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, BM_HORZ_C_PHASE_STEP_OFFSET);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT,  horz_step);
 
     /* Y vertical phase step */
-    WRITE_VREG(PSCALE_BMEM_ADDR, BM_VERT_Y_PHASE_STEP_OFFSET);
-    WRITE_VREG(PSCALE_BMEM_DAT,  vert_step);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, BM_VERT_Y_PHASE_STEP_OFFSET);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT,  vert_step);
 
     /* C vertical phase step */
-    WRITE_VREG(PSCALE_BMEM_ADDR, BM_VERT_C_PHASE_STEP_OFFSET);
-    WRITE_VREG(PSCALE_BMEM_DAT,  vert_step);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, BM_VERT_C_PHASE_STEP_OFFSET);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT,  vert_step);
 }
 
 static void _dec_run(void)
@@ -327,14 +303,14 @@ static void _dec_run(void)
                   CANVAS_ADDR_NOWRAP,
                   CANVAS_BLKMODE_32X32);
 
-    WRITE_VREG(JPEG_SCREEN_OFFSET_X, dec->conf.dec_x);
-    WRITE_VREG(JPEG_SCREEN_OFFSET_Y, dec->conf.dec_y);
-    WRITE_VREG(PSCALE_PICO_SHIFT_XY, 0);
+    WRITE_MPEG_REG(JPEG_SCREEN_OFFSET_X, dec->conf.dec_x);
+    WRITE_MPEG_REG(JPEG_SCREEN_OFFSET_Y, dec->conf.dec_y);
+    WRITE_MPEG_REG(PSCALE_PICO_SHIFT_XY, 0);
 
-    WRITE_VREG(JPEG_MCU_CROP_HSTART, 0);
-    WRITE_VREG(JPEG_MCU_CROP_HEND, ((dec->info.width + 15) >> 4) - 1);
-    WRITE_VREG(JPEG_MCU_CROP_VSTART, 0);
-    WRITE_VREG(JPEG_MCU_CROP_VEND, ((dec->info.height + 15) >> 4) - 1);
+    WRITE_MPEG_REG(JPEG_MCU_CROP_HSTART, 0);
+    WRITE_MPEG_REG(JPEG_MCU_CROP_HEND, ((dec->info.width + 15) >> 4) - 1);
+    WRITE_MPEG_REG(JPEG_MCU_CROP_VSTART, 0);
+    WRITE_MPEG_REG(JPEG_MCU_CROP_VEND, ((dec->info.height + 15) >> 4) - 1);
 
     if ((dec->conf.angle & 1) == 0) {
         r = dec->info.width / dec->conf.dec_w;
@@ -347,8 +323,8 @@ static void _dec_run(void)
         filt0_vert_ratio2 = filt0_table[min((dec->info.height / dec->conf.dec_h) >> (2 + r), 8U)];
         vert_step = (dec->info.height << (16 - filt0_vert_ratio - filt0_vert_ratio2)) / dec->conf.dec_h;
 
-        WRITE_VREG(JPEG_PIC_WIDTH,  dec->conf.dec_w);
-        WRITE_VREG(JPEG_PIC_HEIGHT, dec->conf.dec_h);
+        WRITE_MPEG_REG(JPEG_PIC_WIDTH,  dec->conf.dec_w);
+        WRITE_MPEG_REG(JPEG_PIC_HEIGHT, dec->conf.dec_h);
 
     } else {
         r = dec->info.width / dec->conf.dec_h;
@@ -361,24 +337,24 @@ static void _dec_run(void)
         filt0_vert_ratio2 = filt0_table[min((dec->info.height / dec->conf.dec_w) >> (2 + r), 8U)];
         vert_step = (dec->info.height << (16 - filt0_vert_ratio - filt0_vert_ratio2)) / dec->conf.dec_w;
 
-        WRITE_VREG(JPEG_PIC_WIDTH,  dec->conf.dec_h);
-        WRITE_VREG(JPEG_PIC_HEIGHT, dec->conf.dec_w);
+        WRITE_MPEG_REG(JPEG_PIC_WIDTH,  dec->conf.dec_h);
+        WRITE_MPEG_REG(JPEG_PIC_HEIGHT, dec->conf.dec_w);
     }
 
     _init_scaler(horz_step, vert_step);
 
-    WRITE_VREG(JPEG_DECODE_PARAMETER,
-               filt0_horz_ratio2 << 14 |   //round1
-               filt0_vert_ratio2 << 12 |   //round1
-               filt0_horz_ratio << 10 |    //round0
-               filt0_vert_ratio << 8  |    //round0
-               addr_mode_tab[dec->conf.angle & 3] << 4);
+    WRITE_MPEG_REG(JPEG_DECODE_PARAMETER,
+                   filt0_horz_ratio2 << 14 |   //round1
+                   filt0_vert_ratio2 << 12 |   //round1
+                   filt0_horz_ratio << 10 |    //round0
+                   filt0_vert_ratio << 8  |    //round0
+                   addr_mode_tab[dec->conf.angle & 3] << 4);
 
-    WRITE_VREG(PSCALE_RBUF_START_BLKX, 0);
-    WRITE_VREG(PSCALE_RBUF_START_BLKY, 0);
+    WRITE_MPEG_REG(PSCALE_RBUF_START_BLKX, 0);
+    WRITE_MPEG_REG(PSCALE_RBUF_START_BLKY, 0);
 
-    WRITE_VREG(PSCALE_CANVAS_WR_ADDR, JPEGDEC_OUTPUT_CANVAS);
-    WRITE_VREG(PSCALE_CANVAS_RD_ADDR, PSCALE_CANVAS);
+    WRITE_MPEG_REG(PSCALE_CANVAS_WR_ADDR, JPEGDEC_OUTPUT_CANVAS);
+    WRITE_MPEG_REG(PSCALE_CANVAS_RD_ADDR, PSCALE_CANVAS);
 
     if (dec->conf.opt & JPEGDEC_OPT_FULLRANGE) {
         cmd |= 1 << 5;
@@ -390,7 +366,7 @@ static void _dec_run(void)
 
     pr_dbg("Enable decoding\n");
 
-    WRITE_VREG(JPEG_DECODE_START, cmd | 1);
+    WRITE_MPEG_REG(JPEG_DECODE_START, cmd | 1);
 }
 
 static int amjpegdec_open(struct inode *inode, struct file *file)
@@ -433,7 +409,7 @@ static int amjpegdec_release(struct inode *inode, struct file *file)
     return 0;
 }
 
-static long amjpegdec_ioctl(struct file *file,
+static int amjpegdec_ioctl(struct inode *inode, struct file *file,
                            unsigned int cmd, ulong arg)
 {
     int r = 0;
@@ -445,7 +421,7 @@ static long amjpegdec_ioctl(struct file *file,
 
             dec->conf.opt |= arg & (JPEGDEC_OPT_THUMBNAIL_ONLY | JPEGDEC_OPT_THUMBNAIL_PREFERED);
 
-            WRITE_VREG(JPEG_DECODE_START,
+            WRITE_MPEG_REG(JPEG_DECODE_START,
                            (dec->conf.opt & JPEGDEC_OPT_THUMBNAIL_PREFERED) ? 1 : 0);
 
             dec->state &= ~JPEGDEC_STAT_WAIT_INFOCONFIG;
@@ -459,9 +435,7 @@ static long amjpegdec_ioctl(struct file *file,
 
     case JPEGDEC_IOC_DECCONFIG:
         if (dec->state & JPEGDEC_STAT_WAIT_DECCONFIG) {
-            if (copy_from_user(&dec->conf, (void *)arg, sizeof(jpegdec_config_t))) {
-                return -EFAULT;
-            }
+            copy_from_user(&dec->conf, (void *)arg, sizeof(jpegdec_config_t));
 
             pr_dbg("amjpegdec_ioctl:  JPEGDEC_IOC_DECCONFIG, target (%d-%d-%d-%d)\n",
                    dec->conf.dec_x, dec->conf.dec_y, dec->conf.dec_w, dec->conf.dec_h);
@@ -494,9 +468,7 @@ static long amjpegdec_ioctl(struct file *file,
         if (dec->state & JPEGDEC_STAT_INFO_READY) {
             pr_dbg("amjpegdec_ioctl:  JPEGDEC_IOC_INFO, %dx%d\n",
                    dec->info.width, dec->info.height);
-            if (copy_to_user((void *)arg, &dec->info, sizeof(jpegdec_info_t))) {
-                return -EFAULT;
-            }
+            copy_to_user((void *)arg, &dec->info, sizeof(jpegdec_info_t));
         } else {
             r = -EAGAIN;
         }
@@ -553,27 +525,27 @@ const static struct file_operations amjpegdec_fops = {
     .open     = amjpegdec_open,
     .mmap     = mmap,
     .release  = amjpegdec_release,
-    .unlocked_ioctl    = amjpegdec_ioctl,
+    .ioctl    = amjpegdec_ioctl,
 };
-int AMHWJPEGDEC_MAJOR = 0;
+int HWJPEGDEC_MAJOR = 0;
 static int amjpegdec_probe(struct platform_device *pdev)
 {
     int r;
     struct resource *s;
 
-    AMHWJPEGDEC_MAJOR = 0;
-    r = register_chrdev(AMHWJPEGDEC_MAJOR, "amjpegdev", &amjpegdec_fops);
+    HWJPEGDEC_MAJOR = 0;
+    r = register_chrdev(HWJPEGDEC_MAJOR, "amjpegdev", &amjpegdec_fops);
 
     if (r < 0) {
         pr_error("Can't register major for amjpegdec device\n");
         return r;
     }
-    AMHWJPEGDEC_MAJOR = r;
+    HWJPEGDEC_MAJOR = r;
 
     amjpegdec_class = class_create(THIS_MODULE, DEVICE_NAME);
 
     amjpegdec_dev = device_create(amjpegdec_class, NULL,
-                                  MKDEV(AMHWJPEGDEC_MAJOR, 0), NULL,
+                                  MKDEV(HWJPEGDEC_MAJOR, 0), NULL,
                                   DEVICE_NAME);
 
     s = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -586,11 +558,11 @@ static int amjpegdec_probe(struct platform_device *pdev)
 
 static int amjpegdec_remove(struct platform_device *pdev)
 {
-    device_destroy(amjpegdec_class, MKDEV(AMHWJPEGDEC_MAJOR, 0));
+    device_destroy(amjpegdec_class, MKDEV(HWJPEGDEC_MAJOR, 0));
 
     class_destroy(amjpegdec_class);
 
-    unregister_chrdev(AMHWJPEGDEC_MAJOR, DEVICE_NAME);
+    unregister_chrdev(HWJPEGDEC_MAJOR, DEVICE_NAME);
 
     return 0;
 }

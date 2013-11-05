@@ -33,7 +33,6 @@
 #include <asm/uaccess.h>
 #include <mach/am_regs.h>
 
-#include "vdec_reg.h"
 #include "streambuf_reg.h"
 #include "streambuf.h"
 #include "psparser.h"
@@ -140,8 +139,7 @@ static u32 parser_process(s32 type, s32 packet_len)
     s16 temp, header_len, misc_flags, i;
     u32 pts = 0, dts = 0;
     u32 pts_dts_flag = 0;
-	u16 invalid_pts = 0;
-	
+
     temp = PARSER_POP;
     packet_len--;
 
@@ -301,18 +299,11 @@ static u32 parser_process(s32 type, s32 packet_len)
         }
     }
 
-	if ((pts==0) && (dts==0xffffffff)){
-		invalid_pts = 1;
-		printk("invalid pts \n");
-	}
-
-	
-
     if (!packet_len) {
         return SEARCH_START_CODE;
 
     } else if (type == 0) {
-        if ((pts_dts_flag) && (!invalid_pts)) {
+        if (pts_dts_flag) {
 #if TIMESTAMP_IONLY
             if (!ptsmgr_first_vpts_ready()) {
                 if (pts_dts_flag & 2) {
@@ -346,7 +337,7 @@ static u32 parser_process(s32 type, s32 packet_len)
 #endif
         }
 
-        if (ptsmgr_first_vpts_ready() || invalid_pts) {
+        if (ptsmgr_first_vpts_ready()) {
             SET_BLOCK(packet_len);
             video_data_parsed += packet_len;
             return SEND_VIDEO_SEARCH;
@@ -758,9 +749,7 @@ static ssize_t _psparser_write(const char __user *buf, size_t count)
     if (r > 0) {
         len = min(r, (size_t)FETCHBUF_SIZE);
 
-        if (copy_from_user(fetchbuf_remap, p, len)) {
-            return -EFAULT;
-        }
+        copy_from_user(fetchbuf_remap, p, len);
 
         fetch_done = 0;
 
@@ -845,9 +834,9 @@ s32 psparser_init(u32 vid, u32 aid, u32 sid)
 
     /* hook stream buffer with PARSER */
     WRITE_MPEG_REG(PARSER_VIDEO_START_PTR,
-                   READ_VREG(VLD_MEM_VIFIFO_START_PTR));
+                   READ_MPEG_REG(VLD_MEM_VIFIFO_START_PTR));
     WRITE_MPEG_REG(PARSER_VIDEO_END_PTR,
-                   READ_VREG(VLD_MEM_VIFIFO_END_PTR));
+                   READ_MPEG_REG(VLD_MEM_VIFIFO_END_PTR));
     CLEAR_MPEG_REG_MASK(PARSER_ES_CONTROL, ES_VID_MAN_RD_PTR);
 
     WRITE_MPEG_REG(PARSER_AUDIO_START_PTR,
@@ -861,16 +850,15 @@ s32 psparser_init(u32 vid, u32 aid, u32 sid)
                    (1  << PS_CFG_MAX_ES_WR_CYCLE_BIT) |
                    (16 << PS_CFG_MAX_FETCH_CYCLE_BIT));
 
-    WRITE_VREG(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
-    CLEAR_VREG_MASK(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
+    WRITE_MPEG_REG(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
+    CLEAR_MPEG_REG_MASK(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
 
     WRITE_MPEG_REG(AIU_MEM_AIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
     CLEAR_MPEG_REG_MASK(AIU_MEM_AIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
 
     WRITE_MPEG_REG(PARSER_SUB_START_PTR, parser_sub_start_ptr);
     WRITE_MPEG_REG(PARSER_SUB_END_PTR, parser_sub_end_ptr);
-    WRITE_MPEG_REG(PARSER_SUB_RP, parser_sub_start_ptr);
-    WRITE_MPEG_REG(PARSER_SUB_WP, parser_sub_start_ptr);
+    WRITE_MPEG_REG(PARSER_SUB_RP, parser_sub_rp);
     SET_MPEG_REG_MASK(PARSER_ES_CONTROL, (7 << ES_SUB_WR_ENDIAN_BIT) | ES_SUB_MAN_RD_PTR);
 
     WRITE_MPEG_REG(PFIFO_RD_PTR, 0);
@@ -998,8 +986,8 @@ void psparser_change_sid(unsigned int sid)
 void psparser_audio_reset(void)
 {
     ulong flags;
-	DEFINE_SPINLOCK(lock);
-
+    
+    DEFINE_SPINLOCK(lock);
     spin_lock_irqsave(&lock, flags);
 
     WRITE_MPEG_REG(PARSER_AUDIO_WP,
@@ -1026,7 +1014,7 @@ void psparser_audio_reset(void)
 void psparser_sub_reset(void)
 {
     ulong flags;
-	DEFINE_SPINLOCK(lock);
+    DEFINE_SPINLOCK(lock);
     u32 parser_sub_start_ptr;
     u32 parser_sub_end_ptr;
 

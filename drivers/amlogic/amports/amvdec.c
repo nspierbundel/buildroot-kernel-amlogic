@@ -27,6 +27,7 @@
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/amports/vformat.h>
+#include <linux/clk.h>
 
 #ifdef CONFIG_PM
 #include <linux/pm.h>
@@ -38,12 +39,7 @@
 
 #include <mach/am_regs.h>
 #include <mach/power_gate.h>
-#include "vdec_reg.h"
 #include "amvdec.h"
-
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
 
 #define MC_SIZE (4096 * 4)
 
@@ -64,68 +60,66 @@ static void amvdec_pg_enable(bool enable)
     ulong timeout;
 
     if (enable) {
-        AMVDEC_CLK_GATE_ON(MDEC_CLK_PIC_DC);
-        AMVDEC_CLK_GATE_ON(MDEC_CLK_DBLK);
-        AMVDEC_CLK_GATE_ON(MC_CLK);
-        AMVDEC_CLK_GATE_ON(IQIDCT_CLK);
-        //AMVDEC_CLK_GATE_ON(VLD_CLK);
-        AMVDEC_CLK_GATE_ON(AMRISC);
+        CLK_GATE_ON(MDEC_CLK_PIC_DC);
+        CLK_GATE_ON(MDEC_CLK_DBLK);
+        CLK_GATE_ON(MC_CLK);
+        CLK_GATE_ON(IQIDCT_CLK);
+        //CLK_GATE_ON(VLD_CLK);
+        CLK_GATE_ON(AMRISC);
     } else {
-        AMVDEC_CLK_GATE_OFF(AMRISC);
+        CLK_GATE_OFF(AMRISC);
 
         timeout = jiffies + HZ / 10;
 
-        while (READ_VREG(MDEC_PIC_DC_STATUS) != 0) {
+        while (READ_MPEG_REG(MDEC_PIC_DC_STATUS) != 0) {
             if (time_after(jiffies, timeout)) {
-                WRITE_VREG_BITS(MDEC_PIC_DC_CTRL, 1, 0, 1);
-                WRITE_VREG_BITS(MDEC_PIC_DC_CTRL, 0, 0, 1);
-                READ_VREG(MDEC_PIC_DC_STATUS);
-                READ_VREG(MDEC_PIC_DC_STATUS);
-                READ_VREG(MDEC_PIC_DC_STATUS);
+                WRITE_MPEG_REG_BITS(MDEC_PIC_DC_CTRL, 1, 0, 1);
+                WRITE_MPEG_REG_BITS(MDEC_PIC_DC_CTRL, 0, 0, 1);
+                READ_MPEG_REG(MDEC_PIC_DC_STATUS);
+                READ_MPEG_REG(MDEC_PIC_DC_STATUS);
+                READ_MPEG_REG(MDEC_PIC_DC_STATUS);
                 break;
             }
         }
 
-        AMVDEC_CLK_GATE_OFF(MDEC_CLK_PIC_DC);
+        CLK_GATE_OFF(MDEC_CLK_PIC_DC);
 
         timeout = jiffies + HZ / 10;
 
-        while (READ_VREG(DBLK_STATUS) & 1) {
+        while (READ_MPEG_REG(DBLK_STATUS) & 1) {
             if (time_after(jiffies, timeout)) {
-                WRITE_VREG(DBLK_CTRL, 3);
-                WRITE_VREG(DBLK_CTRL, 0);
-                READ_VREG(DBLK_STATUS);
-                READ_VREG(DBLK_STATUS);
-                READ_VREG(DBLK_STATUS);
+                WRITE_MPEG_REG(DBLK_CTRL, 3);
+                WRITE_MPEG_REG(DBLK_CTRL, 0);
+                READ_MPEG_REG(DBLK_STATUS);
+                READ_MPEG_REG(DBLK_STATUS);
+                READ_MPEG_REG(DBLK_STATUS);
                 break;
             }
         }
-        AMVDEC_CLK_GATE_OFF(MDEC_CLK_DBLK);
+        CLK_GATE_OFF(MDEC_CLK_DBLK);
 
         timeout = jiffies + HZ / 10;
 
-        while (READ_VREG(MC_STATUS0) & 1) {
+        while (READ_MPEG_REG(MC_STATUS0) & 1) {
             if (time_after(jiffies, timeout)) {
-                SET_VREG_MASK(MC_CTRL1, 0x9);
-                CLEAR_VREG_MASK(MC_CTRL1, 0x9);
-                READ_VREG(MC_STATUS0);
-                READ_VREG(MC_STATUS0);
-                READ_VREG(MC_STATUS0);
+                SET_MPEG_REG_MASK(MC_CTRL1, 0x9);
+                CLEAR_MPEG_REG_MASK(MC_CTRL1, 0x9);
+                READ_MPEG_REG(MC_STATUS0);
+                READ_MPEG_REG(MC_STATUS0);
+                READ_MPEG_REG(MC_STATUS0);
                 break;
             }
         }
-        AMVDEC_CLK_GATE_OFF(MC_CLK);
+        CLK_GATE_OFF(MC_CLK);
 
         timeout = jiffies + HZ / 10;
-        while (READ_VREG(DCAC_DMA_CTRL) & 0x8000) {
+        while (READ_MPEG_REG(DCAC_DMA_CTRL) & 0x8000) {
             if (time_after(jiffies, timeout)) {
                 break;
             }
         }
 
-        AMVDEC_CLK_GATE_OFF(IQIDCT_CLK);
-
-        //AMVDEC_CLK_GATE_OFF(VLD_CLK);
+        //CLK_GATE_OFF(VLD_CLK);
     }
 }
 
@@ -165,20 +159,20 @@ s32 amvdec_loadmc(const u32 *p)
 
     mc_addr_map = dma_map_single(NULL, mc_addr, MC_SIZE, DMA_TO_DEVICE);
 
-    WRITE_VREG(MPSR, 0);
-    WRITE_VREG(CPSR, 0);
+    WRITE_MPEG_REG(MPSR, 0);
+    WRITE_MPEG_REG(CPSR, 0);
 
     /* Read CBUS register for timing */
-    timeout = READ_VREG(MPSR);
-    timeout = READ_VREG(MPSR);
+    timeout = READ_MPEG_REG(MPSR);
+    timeout = READ_MPEG_REG(MPSR);
 
     timeout = jiffies + HZ;
 
-    WRITE_VREG(IMEM_DMA_ADR, mc_addr_map);
-    WRITE_VREG(IMEM_DMA_COUNT, 0x1000);
-    WRITE_VREG(IMEM_DMA_CTRL, (0x8000 | (7 << 16)));
+    WRITE_MPEG_REG(IMEM_DMA_ADR, mc_addr_map);
+    WRITE_MPEG_REG(IMEM_DMA_COUNT, 0x1000);
+    WRITE_MPEG_REG(IMEM_DMA_CTRL, (0x8000 | (7 << 16)));
 
-    while (READ_VREG(IMEM_DMA_CTRL) & 0x8000) {
+    while (READ_MPEG_REG(IMEM_DMA_CTRL) & 0x8000) {
         if (time_before(jiffies, timeout)) {
             schedule();
         } else {
@@ -203,18 +197,6 @@ void amvdec_start(void)
     amvdec_wake_lock();
 #endif
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-    READ_VREG(DOS_SW_RESET0);
-    READ_VREG(DOS_SW_RESET0);
-    READ_VREG(DOS_SW_RESET0);
-
-    WRITE_VREG(DOS_SW_RESET0, (1<<12)|(1<<11));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-
-    READ_VREG(DOS_SW_RESET0);
-    READ_VREG(DOS_SW_RESET0);
-    READ_VREG(DOS_SW_RESET0);
-#else
     /* additional cbus dummy register reading for timing control */
     READ_MPEG_REG(RESET0_REGISTER);
     READ_MPEG_REG(RESET0_REGISTER);
@@ -226,36 +208,23 @@ void amvdec_start(void)
     READ_MPEG_REG(RESET0_REGISTER);
     READ_MPEG_REG(RESET0_REGISTER);
     READ_MPEG_REG(RESET0_REGISTER);
-#endif
 
-    WRITE_VREG(MPSR, 0x0001);
+    WRITE_MPEG_REG(MPSR, 0x0001);
 }
 
 void amvdec_stop(void)
 {
     ulong timeout = jiffies + HZ;
 
-    WRITE_VREG(MPSR, 0);
-    WRITE_VREG(CPSR, 0);
+    WRITE_MPEG_REG(MPSR, 0);
+    WRITE_MPEG_REG(CPSR, 0);
 
-    while (READ_VREG(IMEM_DMA_CTRL) & 0x8000) {
+    while (READ_MPEG_REG(IMEM_DMA_CTRL) & 0x8000) {
         if (time_after(jiffies, timeout)) {
             break;
         }
     }
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-    READ_VREG(DOS_SW_RESET0);
-    READ_VREG(DOS_SW_RESET0);
-    READ_VREG(DOS_SW_RESET0);
-
-    WRITE_VREG(DOS_SW_RESET0, (1<<12)|(1<<11));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-
-    READ_VREG(DOS_SW_RESET0);
-    READ_VREG(DOS_SW_RESET0);
-    READ_VREG(DOS_SW_RESET0);
-#else
     WRITE_MPEG_REG(RESET0_REGISTER, RESET_VCPU | RESET_CCPU);
 
     /* additional cbus dummy register reading for timing control */
@@ -263,7 +232,6 @@ void amvdec_stop(void)
     READ_MPEG_REG(RESET0_REGISTER);
     READ_MPEG_REG(RESET0_REGISTER);
     READ_MPEG_REG(RESET0_REGISTER);
-#endif
 
 #ifdef CONFIG_WAKELOCK
     amvdec_wake_unlock();
@@ -303,9 +271,9 @@ static int vdec_is_paused(void)
     unsigned long wp, rp, level;
     static int  paused_time = 0;
 
-    wp = READ_VREG(VLD_MEM_VIFIFO_WP);
-    rp = READ_VREG(VLD_MEM_VIFIFO_RP);
-    level = READ_VREG(VLD_MEM_VIFIFO_LEVEL);
+    wp = READ_MPEG_REG(VLD_MEM_VIFIFO_WP);
+    rp = READ_MPEG_REG(VLD_MEM_VIFIFO_RP);
+    level = READ_MPEG_REG(VLD_MEM_VIFIFO_LEVEL);
     if ((rp == old_rp && level > 1024) || /*have data,but output buffer is fulle*/
         (rp == old_rp && wp == old_wp && level == level)) { /*no write && not read*/
         paused_time++;
@@ -371,6 +339,12 @@ int __init amvdec_init(void)
     amvdevtimer.data = (ulong) & amvdevtimer;
     amvdevtimer.function = vdec_paused_check_timer;
 #endif
+    CLK_GATE_OFF(MDEC_CLK_PIC_DC);
+    CLK_GATE_OFF(MDEC_CLK_DBLK);
+    CLK_GATE_OFF(MC_CLK);
+    CLK_GATE_OFF(IQIDCT_CLK);
+    //CLK_GATE_OFF(VLD_CLK);
+    CLK_GATE_OFF(AMRISC);    
     return 0;
 }
 static void __exit amvdec_exit(void)

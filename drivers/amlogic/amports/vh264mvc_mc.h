@@ -19,12 +19,22 @@
  *
  */
 
-#ifndef VH264MVC_MC_H
-#define VH264MVC_MC_H
+#ifndef VH264_MC_H
+#define VH264_MC_H
 
-extern const u32 vh264mvc_mc[0x1000];
-extern const u32 vh264mvc_header_mc[0x400];
-extern const u32 vh264mvc_mmco_mc[0x800];
-extern const u32 vh264mvc_slice_mc[0x1000];
+#define MicroCode vh264mvc_mc
+#include "h264c_mvc_linux.h"
+
+#undef MicroCode
+#define MicroCode vh264mvc_header_mc
+#include "h264header_mvc_linux.h"
+
+#undef MicroCode
+#define MicroCode vh264mvc_mmco_mc
+#include "h264mmc_mvc_linux.h"
+
+#undef MicroCode
+#define MicroCode vh264mvc_slice_mc
+#include "h264slice_mvc_linux.h"
 
 #endif

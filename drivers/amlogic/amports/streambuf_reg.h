@@ -22,18 +22,8 @@
 #ifndef STREAMBUF_REG_H
 #define STREAMBUF_REG_H
 
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-#define VLD_MEM_VIFIFO_REG_BASE     P_VLD_MEM_VIFIFO_START_PTR
-#define AIU_MEM_AIFIFO_REG_BASE     P_AIU_MEM_AIFIFO_START_PTR
-#else
 #define VLD_MEM_VIFIFO_REG_BASE     VLD_MEM_VIFIFO_START_PTR
 #define AIU_MEM_AIFIFO_REG_BASE     AIU_MEM_AIFIFO_START_PTR
-#endif
-
 #define START_PTR   0
 #define CURR_PTR    1
 #define END_PTR     2
@@ -44,34 +34,11 @@
 #define LEVEL       7
 #define BUF_CTRL    8
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-#define _WRITE_ST_REG(r, val) \
-    __raw_writel(val, buf->reg_base+(r<<2))
-#define _WRITE_ST_REG_BITS(r, val, s, e) \
-    __raw_writel((((_READ_ST_REG(r) & (((1L<<(e)-1)<<(s))-1)<<(s)))|((unsigned)((val)&((1L<<(e))-1))<<(s))), (buf->reg_base+(r<<2)))
-#define _SET_ST_REG_MASK(r, val) \
-    __raw_writel(_READ_ST_REG(r)| (val), (buf->reg_base+(r<<2)))
-#define _CLR_ST_REG_MASK(r, val) \
-    __raw_writel(_READ_ST_REG(r)&~(val), (buf->reg_base+(r<<2)))
-#define _READ_ST_REG(r) \
-    (__raw_readl(buf->reg_base+(r<<2)))
-
-#define MEM_BUFCTRL_MANUAL		(1<<1)
-#define MEM_BUFCTRL_INIT		(1<<0)
-#define MEM_LEVEL_CNT_BIT       18
-#define MEM_FIFO_CNT_BIT        16
-#define MEM_FILL_ON_LEVEL		(1<<10)
-#define MEM_CTRL_EMPTY_EN		(1<<2)
-#define MEM_CTRL_FILL_EN		(1<<1)
-#define MEM_CTRL_INIT			(1<<0)
-
-#else
 #define _WRITE_ST_REG(r, val)             WRITE_MPEG_REG(buf->reg_base + (r), (val))
 #define _WRITE_ST_REG_BITS(r, val, s, e)  WRITE_MPEG_REG(buf->reg_base + (r), (val), (s), (e))
 #define _SET_ST_REG_MASK(r, val)          SET_MPEG_REG_MASK(buf->reg_base + (r), (val))
 #define _CLR_ST_REG_MASK(r, val)          CLEAR_MPEG_REG_MASK(buf->reg_base + (r), (val))
 #define _READ_ST_REG(r)                   READ_MPEG_REG(buf->reg_base + (r))
-#endif
 
 #endif /* STREAMBUF_REG_H */
 

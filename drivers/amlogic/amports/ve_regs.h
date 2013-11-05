@@ -393,13 +393,4 @@
 #define DEMO_WID_BIT            0
 #define DEMO_WID_WID           12
 
-//#define VPP_VDO_MEAS_CTRL                   0x1da8
-#define VDO_MEAS_RST_BIT       10  //reset bit, high active
-#define VDO_MEAS_RST_WID        1
-#define VDO_MEAS_EDGE_BIT       9  //0: rising edge, 1: falling edge
-#define VDO_MEAS_EDGE_WID       1
-#define VDO_MEAS_ACCUM_CNT_BIT  8  //1: accumulate the counter number, 0: not
-#define VDO_MEAS_ACCUM_CNT_WID  1
-#define VDO_MEAS_VS_SPAN_BIT    0  //how many vsync span need to measure
-#define VDO_MEAS_VS_SPAN_WID    8
 #endif // _VE_REG_H

@@ -30,7 +30,6 @@
 #define VPP_FLAG_AR_MASK            0x0003ff00
 #define VPP_FLAG_AR_BITS            8
 #define VPP_FLAG_PORTRAIT_MODE      0x00040000
-#define VPP_FLAG_VSCALE_DISABLE     0x00080000
 
 #define IDX_H           (2 << 8)
 #define IDX_V_Y         (1 << 13)
@@ -123,28 +122,10 @@ extern void
 vpp_get_video_layer_position(s32 *x, s32 *y, s32 *w, s32 *h);
 
 extern void
-vpp_set_global_offset(s32 x, s32 y);
-
-extern void
-vpp_get_global_offset(s32 *x, s32 *y);
-
-extern void
 vpp_set_zoom_ratio(u32 r);
 
 extern u32
 vpp_get_zoom_ratio(void);
-
-extern void 
-vpp_set_osd_layer_preblend(u32*);
-
-extern 
-void vpp_set_osd_layer_position(s32*);
-
-extern
-s32 vpp_set_nonlinear_factor(u32 f);
-
-extern
-u32 vpp_get_nonlinear_factor(void);
 
 #ifdef CONFIG_AM_VIDEO2
 extern void
@@ -163,6 +144,5 @@ vpp2_set_zoom_ratio(u32 r);
 extern u32
 vpp2_get_zoom_ratio(void);
 #endif
-
 
 #endif /* VPP_H */

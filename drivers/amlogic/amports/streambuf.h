@@ -31,26 +31,22 @@
 #define BUF_TYPE_VIDEO      0
 #define BUF_TYPE_AUDIO      1
 #define BUF_TYPE_SUBTITLE   2
-#define BUF_TYPE_USERDATA   3
-#define BUF_MAX_NUM         4
+#define BUF_MAX_NUM         3
 
 #define INVALID_PTS 0xffffffff
 
-#define FETCHBUF_SIZE   (64*1024)
+#define FETCHBUF_SIZE   (128*1024)
 
 typedef struct stream_buf_s {
     s32   flag;
     u32   type;
     u32   buf_start;
     u32   buf_size;
-    u32   canusebuf_size;	
     u32   first_tstamp;
     const ulong reg_base;
     wait_queue_head_t   wq;
     struct timer_list timer;
     u32   wcnt;
-	u32	buf_wp;
-	u32	buf_rp;
 } stream_buf_t;
 
 typedef struct stream_port_s {
@@ -82,7 +78,7 @@ extern u32 stbuf_level(struct stream_buf_s *buf);
 extern u32 stbuf_rp(struct stream_buf_s *buf);
 extern u32 stbuf_space(struct stream_buf_s *buf);
 extern u32 stbuf_size(struct stream_buf_s *buf);
-extern u32 stbuf_canusesize(struct stream_buf_s *buf);
+
 extern s32 stbuf_init(struct stream_buf_s *buf);
 extern s32 stbuf_wait_space(struct stream_buf_s *stream_buf, size_t count);
 extern void stbuf_release(struct stream_buf_s *buf);
@@ -93,7 +89,6 @@ extern u32 stbuf_sub_rp_get(void);
 extern void stbuf_sub_rp_set(unsigned int sub_rp);
 extern u32 stbuf_sub_wp_get(void);
 extern u32 stbuf_sub_start_get(void);
-extern u32 stbuf_userdata_start_get(void);
 extern stream_buf_t* get_stream_buffer(int id);
 
 #endif /* STREAMBUF_H */

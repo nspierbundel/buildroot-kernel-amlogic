@@ -30,11 +30,6 @@
 #include <asm/uaccess.h>
 #include <mach/am_regs.h>
 
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
-#include "vdec_reg.h"
 #include "streambuf_reg.h"
 #include "streambuf.h"
 
@@ -178,9 +173,8 @@ u32 stbuf_rp(struct stream_buf_s *buf)
 u32 stbuf_space(struct stream_buf_s *buf)
 {
     /* reserved space for safe write, the parser fifo size is 1024byts, so reserve it */
-    int size = (buf->canusebuf_size- _READ_ST_REG(LEVEL)) ;
-    if(buf->canusebuf_size>=buf->buf_size/2)
-        size=size-6*1024;//old reversed value,tobe full, reversed only...
+    /* resever some space for demux buffer */
+    int size = (buf->buf_size - _READ_ST_REG(LEVEL)) - 1024*6;
 
     return size > 0 ? size : 0;
 }
@@ -189,10 +183,7 @@ u32 stbuf_size(struct stream_buf_s *buf)
 {
     return buf->buf_size;
 }
-u32 stbuf_canusesize(struct stream_buf_s *buf)
-{
-    return buf->canusebuf_size;
-}
+
 s32 stbuf_init(struct stream_buf_s *buf)
 {
     s32 r;
@@ -211,21 +202,14 @@ s32 stbuf_init(struct stream_buf_s *buf)
 
     init_waitqueue_head(&buf->wq);
 
-    if (buf->type == BUF_TYPE_VIDEO) {
-        _WRITE_ST_REG(CONTROL, 0);
-        /* reset VLD before setting all pointers */
-        WRITE_VREG(VLD_MEM_VIFIFO_WRAP_COUNT,0);
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-        WRITE_VREG(DOS_SW_RESET0, (1<<4));
-        WRITE_VREG(DOS_SW_RESET0, 0);
-#else
-        WRITE_MPEG_REG(RESET0_REGISTER, RESET_VLD);
-#endif
-        dummy = READ_MPEG_REG(RESET0_REGISTER);
-        WRITE_VREG(POWER_CTL_VLD, 1 << 4);
-    } else if (buf->type == BUF_TYPE_AUDIO) {
-        _WRITE_ST_REG(CONTROL, 0);
+    _WRITE_ST_REG(CONTROL, 0);
 
+    if (buf->type == BUF_TYPE_VIDEO) {
+        /* reset VLD before setting all pointers */
+        WRITE_MPEG_REG(RESET0_REGISTER, RESET_VLD);
+        dummy = READ_MPEG_REG(RESET0_REGISTER);
+        WRITE_MPEG_REG(POWER_CTL_VLD, 1 << 4);
+    } else if (buf->type == BUF_TYPE_AUDIO) {
         WRITE_MPEG_REG(AIU_AIFIFO_GBIT, 0x80);
     }
 

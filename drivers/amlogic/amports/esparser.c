@@ -36,7 +36,6 @@
 
 #include <mach/am_regs.h>
 
-#include "vdec_reg.h"
 #include "streambuf_reg.h"
 #include "streambuf.h"
 #include "esparser.h"
@@ -92,13 +91,6 @@ static irqreturn_t parser_isr(int irq, void *dev_id)
     return IRQ_HANDLED;
 }
 
-static inline u32 buf_rp(u32 type)
-{
-    return (type == BUF_TYPE_VIDEO) ? READ_VREG(VLD_MEM_VIFIFO_WP) :
-           (type == BUF_TYPE_AUDIO) ? READ_MPEG_REG(AIU_MEM_AIFIFO_MAN_WP) :
-                                      READ_MPEG_REG(PARSER_SUB_START_PTR);
-}
-
 static ssize_t _esparser_write(const char __user *buf, size_t count, u32 type)
 {
     size_t r = count;
@@ -106,24 +98,24 @@ static ssize_t _esparser_write(const char __user *buf, size_t count, u32 type)
     u32 len = 0;
     u32 parser_type;
     int ret;
-    u32 wp;
+    u32 wp,wp_reg;
 	
     if (type == BUF_TYPE_VIDEO) {
+		wp_reg=VLD_MEM_VIFIFO_WP;
+		
         parser_type = PARSER_VIDEO;
     } else if (type == BUF_TYPE_AUDIO) {
+   	 	wp_reg=AIU_MEM_AIFIFO_MAN_WP;
         parser_type = PARSER_AUDIO;
     } else {
+    	wp_reg=PARSER_SUB_START_PTR;
         parser_type = PARSER_SUBPIC;
     }
-
-    wp = buf_rp(type);
+	wp=READ_MPEG_REG(wp_reg);
     if (r > 0) {
         len = min(r, (size_t)FETCHBUF_SIZE);
 
-        if (copy_from_user(fetchbuf_remap, p, len)) {
-            return -EFAULT;
-        }
-
+        copy_from_user(fetchbuf_remap, p, len);
 	wmb();
         // reset the Write and read pointer to zero again
         WRITE_MPEG_REG(PFIFO_RD_PTR, 0);
@@ -148,13 +140,12 @@ static ssize_t _esparser_write(const char __user *buf, size_t count, u32 type)
         ret = wait_event_interruptible_timeout(wq, search_done != 0, HZ/10);
         if (ret == 0) {
             WRITE_MPEG_REG(PARSER_FETCH_CMD, 0);
-
-            if (wp == buf_rp(type)) {
-                /*no data fetched*/
+	    printk("esparser write timeout\n");
+	    if(wp==READ_MPEG_REG(wp_reg))/*no data fetched*/
             	return -EAGAIN;
-            } else {
-                printk("write timeout, but fetched ok,len=%d,wpdiff=%d\n", len, wp - buf_rp(type));
-            }
+	    else{
+		printk("write timeout, but fetched ok,len=%d,wpdiff=%d\n",len,wp-(u32)READ_MPEG_REG(wp_reg));
+	    }
         } else if (ret < 0) {
             return -ERESTARTSYS;
         }
@@ -290,13 +281,13 @@ s32 esparser_init(struct stream_buf_s *buf)
     /* hook stream buffer with PARSER */
     if (pts_type == PTS_TYPE_VIDEO) {
         WRITE_MPEG_REG(PARSER_VIDEO_START_PTR,
-                       READ_VREG(VLD_MEM_VIFIFO_START_PTR));
+                       READ_MPEG_REG(VLD_MEM_VIFIFO_START_PTR));
         WRITE_MPEG_REG(PARSER_VIDEO_END_PTR,
-                       READ_VREG(VLD_MEM_VIFIFO_END_PTR));
+                       READ_MPEG_REG(VLD_MEM_VIFIFO_END_PTR));
         CLEAR_MPEG_REG_MASK(PARSER_ES_CONTROL, ES_VID_MAN_RD_PTR);
 
-        WRITE_VREG(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
-        CLEAR_VREG_MASK(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
+        WRITE_MPEG_REG(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
+        CLEAR_MPEG_REG_MASK(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
 
         video_data_parsed = 0;
     } else if (pts_type == PTS_TYPE_AUDIO) {
@@ -363,8 +354,9 @@ Err_1:
 void esparser_audio_reset(struct stream_buf_s *buf)
 {
     ulong flags;
-	DEFINE_SPINLOCK(lock);
-
+    
+    DEFINE_SPINLOCK(lock);
+    
     spin_lock_irqsave(&lock, flags);
 
     WRITE_MPEG_REG(PARSER_AUDIO_WP,
@@ -435,24 +427,20 @@ ssize_t esparser_write(struct file *file,
         return -EINVAL;
     }
 
-    if (stbuf->type!=BUF_TYPE_SUBTITLE && /*subtitle have no level to check,*/
-		stbuf_space(stbuf) < count) {
+    if (stbuf_space(stbuf) < count) {
         if (file->f_flags & O_NONBLOCK) {
-		len = stbuf_space(stbuf) ;	
-		if(len<256)//<1k.do eagain,
-			return -EAGAIN;
-        }else{
-	        len = min(stbuf_canusesize(stbuf) / 8, len);
+            return -EAGAIN;
+        }
 
-	        if (stbuf_space(stbuf) < len) {
-	            r = stbuf_wait_space(stbuf, len);
-	            if (r < 0) {
-	                return r;
-	            }
-	        }
-	}
+        len = min(stbuf_size(stbuf) / 8, len);
+
+        if (stbuf_space(stbuf) < len) {
+            r = stbuf_wait_space(stbuf, len);
+            if (r < 0) {
+                return r;
+            }
+        }
     }
-    len = min(len, count);
     mutex_lock(&esparser_mutex);
     r = _esparser_write(buf, len, stbuf->type);
     mutex_unlock(&esparser_mutex);
@@ -463,7 +451,7 @@ ssize_t esparser_write(struct file *file,
 void esparser_sub_reset(void)
 {
     ulong flags;
-	DEFINE_SPINLOCK(lock);
+    DEFINE_SPINLOCK(lock);
     u32 parser_sub_start_ptr;
     u32 parser_sub_end_ptr;
 

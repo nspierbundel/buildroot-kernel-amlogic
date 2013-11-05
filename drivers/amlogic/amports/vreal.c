@@ -26,8 +26,6 @@
 #include <linux/timer.h>
 #include <linux/fs.h>
 #include <linux/platform_device.h>
-#include <mach/am_regs.h>
-#include <plat/io.h>
 #include <linux/dma-mapping.h>
 #include <linux/amports/amstream.h>
 #include <linux/amports/ptsserv.h>
@@ -35,16 +33,9 @@
 #include <linux/amports/vframe.h>
 #include <linux/amports/vframe_provider.h>
 #include <linux/amports/vframe_receiver.h>
-
+#include <mach/am_regs.h>
 #include <asm/uaccess.h>
 
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
-
-#include "vdec_reg.h"
-#include "vreal.h"
 #include "amvdec.h"
 #include "vreal_mc.h"
 
@@ -58,9 +49,6 @@
 #define MODULE_NAME "amvdec_real"
 
 #define HANDLE_REAL_IRQ
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-#define NV21
-#endif
 
 #define RM_DEF_BUFFER_ADDR        0x81000000
 /* protocol registers */
@@ -70,19 +58,13 @@
 #define DECODER_ERROR_VLC_DECODE_TBL    0x20
 
 #define RV_PIC_INFO     AV_SCRATCH_5
-#define VPTS_TR         AV_SCRATCH_6
-#define VDTS            AV_SCRATCH_7
+#define VPTS_TR          AV_SCRATCH_6
+#define VDTS             AV_SCRATCH_7
 #define FROM_AMRISC     AV_SCRATCH_8
 #define TO_AMRISC       AV_SCRATCH_9
 #define SKIP_B_AMRISC   AV_SCRATCH_A
-
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-#define MDEC_WIDTH      AV_SCRATCH_I
-#define MDEC_HEIGHT     AV_SCRATCH_J
-#else
 #define MDEC_WIDTH      HARM_ASB_MB2
 #define MDEC_HEIGHT     HASB_ARM_MB0
-#endif
 
 #define PARC_FORBIDDEN              0
 #define PARC_SQUARE                 1
@@ -106,8 +88,6 @@
 #define STAT_VF_HOOK        0x08
 #define STAT_TIMER_ARM      0x10
 #define STAT_VDEC_RUN       0x20
-
-#define PARSER_FATAL_ERROR  0x10
 
 #define REAL_RECYCLE_Q_BITS 3
 #define REAL_RECYCLE_Q_SIZE (1<<(REAL_RECYCLE_Q_BITS))
@@ -156,8 +136,6 @@ static u32 real_recycle_q[REAL_RECYCLE_Q_SIZE];
 static u32 real_recycle_rd;
 static u32 real_recycle_wr;
 
-static u32 fatal_flag;
-
 static DEFINE_SPINLOCK(lock);
 
 static unsigned short pic_sz_tbl[12] __attribute__((aligned(32)));
@@ -181,11 +159,7 @@ static unsigned char aspect_ratio_table[16] = {
 static inline u32 index2canvas(u32 index)
 {
     const u32 canvas_tab[4] = {
-#ifdef NV21
-        0x010100, 0x030302, 0x050504, 0x070706
-#else
         0x020100, 0x050403, 0x080706, 0x0b0a09
-#endif
     };
 
     return canvas_tab[index];
@@ -265,20 +239,20 @@ static void vreal_isr(void)
 #endif
     }
 
-    status = READ_VREG(STATUS_AMRISC);
+    status = READ_MPEG_REG(STATUS_AMRISC);
     if (status & (PARSER_ERROR_WRONG_PACKAGE_SIZE | PARSER_ERROR_WRONG_HEAD_VER | DECODER_ERROR_VLC_DECODE_TBL)) {
         // decoder or parser error
         real_err_count++;
         //printk("real decoder or parser error, status 0x%x\n", status);
     }
 
-    from = READ_VREG(FROM_AMRISC);
+    from = READ_MPEG_REG(FROM_AMRISC);
     if ((hold == 0) && from) {
-        tr = READ_VREG(VPTS_TR);
+        tr = READ_MPEG_REG(VPTS_TR);
         pictype = (tr >> 13) & 3;
         tr = (tr & 0x1fff) * 96;
         vf = &vfpool[fill_ptr];
-        vdts = READ_VREG(VDTS);
+        vdts = READ_MPEG_REG(VDTS);
         if (last_tr == -1) { // ignore tr for first time
             vf->duration = frame_dur;
         } else {
@@ -313,10 +287,10 @@ static void vreal_isr(void)
             }
         } else {
             if (wait_key_frame) {
-                while (READ_VREG(TO_AMRISC)) {}
-                WRITE_VREG(TO_AMRISC, ~(1 << buffer_index));
+                while (READ_MPEG_REG(TO_AMRISC)) {}
+                WRITE_MPEG_REG(TO_AMRISC, ~(1 << buffer_index));
                 //INCPTR(put_ptr);
-                WRITE_VREG(FROM_AMRISC, 0);
+                WRITE_MPEG_REG(FROM_AMRISC, 0);
 #ifdef HANDLE_REAL_IRQ
                 return IRQ_HANDLED;
 #else
@@ -330,20 +304,16 @@ static void vreal_isr(void)
 
         //printk("pts %d, picture type %d\n", vf->pts, pictype);
 
-        info = READ_VREG(RV_PIC_INFO);
+        info = READ_MPEG_REG(RV_PIC_INFO);
         vf->width = info >> 16;
         vf->height = (info >> 4) & 0xfff;
         vf->bufWidth = 1920;
         vf->ratio_control = 0;
         set_aspect_ratio(vf, info & 0x0f);
         vf->duration_pulldown = 0;
-#ifdef NV21
-        vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD | VIDTYPE_VIU_NV21;
-#else
         vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD;
-#endif
         vf->canvas0Addr = vf->canvas1Addr = index2canvas(buffer_index);
-        vf->orientation = 0 ;
+
         vfpool_idx[fill_ptr] = buffer_index;
 
         vfbuf_use[buffer_index]++;
@@ -352,10 +322,10 @@ static void vreal_isr(void)
 
         frame_count++;
         vf_notify_receiver(PROVIDER_NAME,VFRAME_EVENT_PROVIDER_VFRAME_READY,NULL);
-        WRITE_VREG(FROM_AMRISC, 0);
+        WRITE_MPEG_REG(FROM_AMRISC, 0);
     }
 
-    WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
 
 #ifdef HANDLE_REAL_IRQ
     return IRQ_HANDLED;
@@ -453,13 +423,13 @@ static void vreal_put_timer_func(unsigned long arg)
             //WRITE_MPEG_REG(VIDEO_PTS, realdec.buffer_timestamp[disbuf->buffer_index]);
             /* this frame is not used, need return this buffer back to decoder side */
             /* todo: fix this polling, something on amrisc side */
-            while (READ_VREG(TO_AMRISC)) {
-                status = READ_VREG(STATUS_AMRISC);
+            while (READ_MPEG_REG(TO_AMRISC)) {
+                status = READ_MPEG_REG(STATUS_AMRISC);
                 if (status & (PARSER_ERROR_WRONG_PACKAGE_SIZE | PARSER_ERROR_WRONG_HEAD_VER | DECODER_ERROR_VLC_DECODE_TBL)) {
                     break;
                 }
             }
-            WRITE_VREG(TO_AMRISC, ~(1 << index));
+            WRITE_MPEG_REG(TO_AMRISC, ~(1 << index));
 #endif
             real_recycle_q[real_recycle_wr++] = ~(1 << index);
             real_recycle_wr &= REAL_RECYCLE_Q_MASK;
@@ -468,8 +438,8 @@ static void vreal_put_timer_func(unsigned long arg)
         INCPTR(put_ptr);
     }
 
-    if ((real_recycle_rd != real_recycle_wr) && !READ_VREG(TO_AMRISC)) {
-        WRITE_VREG(TO_AMRISC, real_recycle_q[real_recycle_rd++]);
+    if ((real_recycle_rd != real_recycle_wr) && !READ_MPEG_REG(TO_AMRISC)) {
+        WRITE_MPEG_REG(TO_AMRISC, real_recycle_q[real_recycle_rd++]);
         real_recycle_rd &= REAL_RECYCLE_Q_MASK;
     }
 
@@ -488,8 +458,7 @@ int vreal_dec_status(struct vdec_status *vstatus)
         vstatus->fps = 96000;
     }
     vstatus->error_count = real_err_count;
-    vstatus->status = ((READ_VREG(STATUS_AMRISC) | fatal_flag)<< 16) | stat;
-    //printk("vreal_dec_status 0x%x\n", vstatus->status);
+    vstatus->status = (READ_MPEG_REG(STATUS_AMRISC) << 16) | stat;
     return 0;
 }
 
@@ -527,16 +496,6 @@ static void vreal_canvas_init(void)
 
     for (i = 0; i < 4; i++) {
         if (((buf_start + i * decbuf_size + 7) >> 3) == disp_addr) {
-#ifdef NV21
-            canvas_config(2 * i + 0,
-                          buf_start + 4 * decbuf_size,
-                          canvas_width, canvas_height,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-            canvas_config(2 * i + 1,
-                          buf_start + 4 * decbuf_size + decbuf_y_size,
-                          canvas_width, canvas_height / 2,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#else
             canvas_config(3 * i + 0,
                           buf_start + 4 * decbuf_size,
                           canvas_width, canvas_height,
@@ -549,18 +508,7 @@ static void vreal_canvas_init(void)
                           buf_start + 4 * decbuf_size + decbuf_y_size + decbuf_uv_size,
                           canvas_width / 2, canvas_height / 2,
                           CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#endif
         } else {
-#ifdef NV21
-            canvas_config(2 * i + 0,
-                          buf_start + i * decbuf_size,
-                          canvas_width, canvas_height,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-            canvas_config(2 * i + 1,
-                          buf_start + i * decbuf_size + decbuf_y_size,
-                          canvas_width, canvas_height / 2,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#else
             canvas_config(3 * i + 0,
                           buf_start + i * decbuf_size,
                           canvas_width, canvas_height,
@@ -573,69 +521,47 @@ static void vreal_canvas_init(void)
                           buf_start + i * decbuf_size + decbuf_y_size + decbuf_uv_size,
                           canvas_width / 2, canvas_height / 2,
                           CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#endif
         }
     }
 }
 
 static void vreal_prot_init(void)
 {
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-    WRITE_VREG(DOS_SW_RESET0, (1<<7) | (1<<6));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-#else
     WRITE_MPEG_REG(RESET0_REGISTER, RESET_IQIDCT | RESET_MC);
-#endif
 
     vreal_canvas_init();
 
     /* index v << 16 | u << 8 | y */
-#ifdef NV21
-    WRITE_VREG(AV_SCRATCH_0, 0x010100);
-    WRITE_VREG(AV_SCRATCH_1, 0x030302);
-    WRITE_VREG(AV_SCRATCH_2, 0x050504);
-    WRITE_VREG(AV_SCRATCH_3, 0x070706);
-#else
-    WRITE_VREG(AV_SCRATCH_0, 0x020100);
-    WRITE_VREG(AV_SCRATCH_1, 0x050403);
-    WRITE_VREG(AV_SCRATCH_2, 0x080706);
-    WRITE_VREG(AV_SCRATCH_3, 0x0b0a09);
-#endif
+    WRITE_MPEG_REG(AV_SCRATCH_0, 0x020100);
+    WRITE_MPEG_REG(AV_SCRATCH_1, 0x050403);
+    WRITE_MPEG_REG(AV_SCRATCH_2, 0x080706);
+    WRITE_MPEG_REG(AV_SCRATCH_3, 0x0b0a09);
 
     /* notify ucode the buffer offset */
-    WRITE_VREG(AV_SCRATCH_F, buf_offset >> 12);
+    WRITE_MPEG_REG(AV_SCRATCH_F, buf_offset >> 12);
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-    WRITE_VREG(DOS_SW_RESET0, (1<<9) | (1<<8));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-#else
     WRITE_MPEG_REG(RESET2_REGISTER, RESET_PIC_DC | RESET_DBLK);
-#endif
 
     /* disable PSCALE for hardware sharing */
-    WRITE_VREG(PSCALE_CTRL, 0);
+    WRITE_MPEG_REG(PSCALE_CTRL, 0);
 
-    WRITE_VREG(FROM_AMRISC, 0);
-    WRITE_VREG(TO_AMRISC, 0);
-    WRITE_VREG(STATUS_AMRISC, 0);
+    WRITE_MPEG_REG(FROM_AMRISC, 0);
+    WRITE_MPEG_REG(TO_AMRISC, 0);
+    WRITE_MPEG_REG(STATUS_AMRISC, 0);
 
-    WRITE_VREG(RV_PIC_INFO, 0);
-    WRITE_VREG(VPTS_TR, 0);
-    WRITE_VREG(VDTS, 0);
-    WRITE_VREG(SKIP_B_AMRISC, 0);
+    WRITE_MPEG_REG(RV_PIC_INFO, 0);
+    WRITE_MPEG_REG(VPTS_TR, 0);
+    WRITE_MPEG_REG(VDTS, 0);
+    WRITE_MPEG_REG(SKIP_B_AMRISC, 0);
 
-    WRITE_VREG(MDEC_WIDTH, (frame_width + 15) & 0xfff0);
-    WRITE_VREG(MDEC_HEIGHT, (frame_height + 15) & 0xfff0);
+    WRITE_MPEG_REG(MDEC_WIDTH, (frame_width + 15) & 0xfff0);
+    WRITE_MPEG_REG(MDEC_HEIGHT, (frame_height + 15) & 0xfff0);
 
     /* clear mailbox interrupt */
-    WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
 
     /* enable mailbox interrupt */
-    WRITE_VREG(ASSIST_MBOX1_MASK, 1);
-
-#ifdef NV21
-    SET_VREG_MASK(MDEC_PIC_DC_CTRL, 1<<17);
-#endif
+    WRITE_MPEG_REG(ASSIST_MBOX1_MASK, 1);
 }
 
 static void vreal_local_init(void)
@@ -669,8 +595,6 @@ static void vreal_local_init(void)
     real_recycle_wr = 0;
 
     pic_sz_tbl_map = 0;
-
-    fatal_flag = 0;
 }
 
 static void load_block_data(unsigned int dest, unsigned int count)
@@ -680,7 +604,7 @@ static void load_block_data(unsigned int dest, unsigned int count)
     unsigned int i;
 
     src_tbl[0] = RPR_size[vreal_amstream_dec_info.extra + 1];
-    memcpy((void *)&src_tbl[1], vreal_amstream_dec_info.param, 2 << src_tbl[0]);
+    copy_from_user((void *)&src_tbl[1], vreal_amstream_dec_info.param, 2 << src_tbl[0]);
 
 #if 0
     for (i = 0; i < 12; i++) {
@@ -704,14 +628,8 @@ static void load_block_data(unsigned int dest, unsigned int count)
 s32 vreal_init(void)
 {
     int r;
-    dma_addr_t buf_start_map;
 
     printk("vreal_init\n");
-
-    memset(phys_to_virt(buf_start), 0, buf_size);
-
-    buf_start_map = dma_map_single(NULL, phys_to_virt(buf_start), buf_size, DMA_TO_DEVICE);
-    
     init_timer(&recycle_timer);
 
     stat |= STAT_TIMER_INIT;
@@ -732,10 +650,10 @@ s32 vreal_init(void)
         load_block_data((unsigned int)pic_sz_tbl, 12);
 
         //  TODO: need to load the table into lmem
-        WRITE_VREG(LMEM_DMA_ADR, (unsigned)pic_sz_tbl_map);
-        WRITE_VREG(LMEM_DMA_COUNT, 10);
-        WRITE_VREG(LMEM_DMA_CTRL, 0xc178 | (3 << 11));
-        while (READ_VREG(LMEM_DMA_CTRL) & 0x8000) {};
+        WRITE_MPEG_REG(LMEM_DMA_ADR, (unsigned)pic_sz_tbl_map);
+        WRITE_MPEG_REG(LMEM_DMA_COUNT, 10);
+        WRITE_MPEG_REG(LMEM_DMA_CTRL, 0xc178 | (3 << 11));
+        while (READ_MPEG_REG(LMEM_DMA_CTRL) & 0x8000) {};
 
         printk("load VIDEO_DEC_FORMAT_REAL_8\n");
         if (amvdec_loadmc(vreal_mc_8) < 0) {
@@ -756,7 +674,6 @@ s32 vreal_init(void)
         printk("unsurpported real format\n");
     }
 
-    dma_unmap_single(NULL, buf_start_map, buf_size, DMA_TO_DEVICE);
     stat |= STAT_MC_LOAD;
 
     /* enable AMRISC side protocol */
@@ -801,13 +718,6 @@ s32 vreal_init(void)
     printk("vreal init finished\n");
 
     return 0;
-}
-
-void vreal_set_fatal_flag(int flag)
-{
-    if (flag) {
-        fatal_flag = PARSER_FATAL_ERROR;
-    }
 }
 
 static int amvdec_real_probe(struct platform_device *pdev)

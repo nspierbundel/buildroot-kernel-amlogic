@@ -22,13 +22,8 @@
 #ifndef VMPEG4_H
 #define VMPEG4_H
 
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
+extern s32 vmpeg4_init(void);
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-// TODO: move to register headers
-#define VPP_VD1_POSTBLEND           (1 << 10)
-#endif
+extern s32 vmpeg4_release(void);
 
 #endif /* VMPEG4_H */

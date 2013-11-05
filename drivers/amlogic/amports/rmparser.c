@@ -32,10 +32,8 @@
 #include <mach/am_regs.h>
 #include <asm/uaccess.h>
 
-#include "vdec_reg.h"
 #include "streambuf.h"
 #include "streambuf_reg.h"
-#include "rmparser.h"
 
 #define MANAGE_PTS
 
@@ -44,8 +42,6 @@ static u32 parse_halt;
 
 static DECLARE_WAIT_QUEUE_HEAD(rm_wq);
 const static char rmparser_id[] = "rmparser-id";
-
-extern void vreal_set_fatal_flag(int flag);
 
 static irqreturn_t rm_parser_isr(int irq, void *dev_id)
 
@@ -91,9 +87,9 @@ s32 rmparser_init(void)
 
     /* hook stream buffer with PARSER */
     WRITE_MPEG_REG(PARSER_VIDEO_START_PTR,
-                   READ_VREG(VLD_MEM_VIFIFO_START_PTR));
+                   READ_MPEG_REG(VLD_MEM_VIFIFO_START_PTR));
     WRITE_MPEG_REG(PARSER_VIDEO_END_PTR,
-                   READ_VREG(VLD_MEM_VIFIFO_END_PTR));
+                   READ_MPEG_REG(VLD_MEM_VIFIFO_END_PTR));
     CLEAR_MPEG_REG_MASK(PARSER_ES_CONTROL, ES_VID_MAN_RD_PTR);
 
     WRITE_MPEG_REG(PARSER_AUDIO_START_PTR,
@@ -102,8 +98,8 @@ s32 rmparser_init(void)
                    READ_MPEG_REG(AIU_MEM_AIFIFO_END_PTR));
     CLEAR_MPEG_REG_MASK(PARSER_ES_CONTROL, ES_AUD_MAN_RD_PTR);
 
-    WRITE_VREG(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
-    CLEAR_VREG_MASK(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
+    WRITE_MPEG_REG(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
+    CLEAR_MPEG_REG_MASK(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
 
     WRITE_MPEG_REG(AIU_MEM_AIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
     CLEAR_MPEG_REG_MASK(AIU_MEM_AIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
@@ -172,9 +168,7 @@ static ssize_t _rmparser_write(const char __user *buf, size_t count)
     if (r > 0) {
         len = min(r, (size_t)FETCHBUF_SIZE);
 
-        if (copy_from_user(fetchbuf_remap, p, len)) {
-            return -EFAULT;
-        }
+        copy_from_user(fetchbuf_remap, p, len);
 
         fetch_done = 0;
 
@@ -191,8 +185,6 @@ static ssize_t _rmparser_write(const char __user *buf, size_t count)
             parse_halt ++;
 			printk("write timeout, retry,halt_count=%d parse_control=%x \n",
 			    parse_halt,READ_MPEG_REG(PARSER_CONTROL));
-
-            vreal_set_fatal_flag(1);
 			
 			if(parse_halt > 10) {			    
 			    WRITE_MPEG_REG(PARSER_CONTROL, (ES_SEARCH | ES_PARSER_START));
@@ -217,32 +209,30 @@ ssize_t rmparser_write(struct file *file,
 {
     s32 r;
     stream_port_t *port = (stream_port_t *)file->private_data;
-    size_t towrite=count;
+
     if ((stbuf_space(vbuf) < count) ||
         (stbuf_space(abuf) < count)) {
-        if (file->f_flags & O_NONBLOCK) { 
-            towrite=min(stbuf_space(vbuf), stbuf_space(abuf));
-	     if(towrite<1024)/*? can write small?*/
-	         return -EAGAIN;			
-        }else{
-	        if ((port->flag & PORT_FLAG_VID)
-	            && (stbuf_space(vbuf) < count)) {
-	            r = stbuf_wait_space(vbuf, count);
-	            if (r < 0) {
-	                return r;
-	            }
-	        }
-	        if ((port->flag & PORT_FLAG_AID)
-	            && (stbuf_space(abuf) < count)) {
-	            r = stbuf_wait_space(abuf, count);
-	            if (r < 0) {
-	                return r;
-	            }
-	        }
+        if (file->f_flags & O_NONBLOCK) {
+            return -EAGAIN;
+        }
+
+        if ((port->flag & PORT_FLAG_VID)
+            && (stbuf_space(vbuf) < count)) {
+            r = stbuf_wait_space(vbuf, count);
+            if (r < 0) {
+                return r;
+            }
+        }
+        if ((port->flag & PORT_FLAG_AID)
+            && (stbuf_space(abuf) < count)) {
+            r = stbuf_wait_space(abuf, count);
+            if (r < 0) {
+                return r;
+            }
         }
     }
 
-    return _rmparser_write(buf, towrite);
+    return _rmparser_write(buf, count);
 }
 
 void rm_set_vasid(u32 vid, u32 aid)
@@ -256,7 +246,7 @@ void rm_set_vasid(u32 vid, u32 aid)
 void rm_audio_reset(void)
 {
     ulong flags;
-	DEFINE_SPINLOCK(lock);
+    DEFINE_SPINLOCK(lock);
 
     spin_lock_irqsave(&lock, flags);
 

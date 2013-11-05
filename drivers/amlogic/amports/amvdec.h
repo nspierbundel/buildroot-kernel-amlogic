@@ -22,10 +22,6 @@
 #ifndef AMVDEC_H
 #define AMVDEC_H
 
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
 #define UCODE_ALIGN         8
 #define UCODE_ALIGN_MASK    7UL
 
@@ -46,20 +42,6 @@ extern int amvdev_resume(void);
 #ifdef CONFIG_PM
 extern int amvdec_suspend(struct platform_device *dev, pm_message_t event);
 extern int amvdec_resume(struct platform_device *dec);
-#endif
-
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-#define AMVDEC_CLK_GATE_ON(a)
-#define AMVDEC_CLK_GATE_OFF(a)
-#else
-#define AMVDEC_CLK_GATE_ON(a) CLK_GATE_ON(a)
-#define AMVDEC_CLK_GATE_OFF(a) CLK_GATE_OFF(a)
-#endif
-
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-// TODO: move to register headers
-#define RESET_VCPU          (1<<7)
-#define RESET_CCPU          (1<<8)
 #endif
 
 #endif /* AMVDEC_H */

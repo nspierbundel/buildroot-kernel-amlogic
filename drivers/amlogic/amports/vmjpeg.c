@@ -25,20 +25,13 @@
 #include <linux/interrupt.h>
 #include <linux/timer.h>
 #include <linux/platform_device.h>
-#include <mach/am_regs.h>
-#include <plat/io.h>
 #include <linux/amports/ptsserv.h>
 #include <linux/amports/amstream.h>
 #include <linux/amports/canvas.h>
 #include <linux/amports/vframe.h>
 #include <linux/amports/vframe_provider.h>
 #include <linux/amports/vframe_receiver.h>
-
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
-#include "vdec_reg.h"
+#include <mach/am_regs.h>
 
 #ifdef CONFIG_AM_VDEC_MJPEG_LOG
 #define AMLOG
@@ -89,10 +82,6 @@ MODULE_AMLOG(LOG_LEVEL_ERROR, 0, LOG_LEVEL_DESC, LOG_DEFAULT_MASK_DESC);
 #define STAT_TIMER_ARM      0x10
 #define STAT_VDEC_RUN       0x20
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-//#define NV21
-#endif
-
 static struct dec_sysinfo vmjpeg_amstream_dec_info;
 
 static vframe_t *vmjpeg_vf_peek(void*);
@@ -129,11 +118,7 @@ static DEFINE_SPINLOCK(lock);
 static inline u32 index2canvas0(u32 index)
 {
     const u32 canvas_tab[4] = {
-#ifdef NV21
-        0x010100, 0x030302, 0x050504, 0x070706
-#else
         0x020100, 0x050403, 0x080706, 0x0b0a09
-#endif
     };
 
     return canvas_tab[index];
@@ -142,11 +127,7 @@ static inline u32 index2canvas0(u32 index)
 static inline u32 index2canvas1(u32 index)
 {
     const u32 canvas_tab[4] = {
-#ifdef NV21
-        0x0d0d0c, 0x0f0f0e, 0x111110, 0x131312
-#else
         0x0e0d0c, 0x11100f, 0x141312, 0x171615
-#endif
     };
 
     return canvas_tab[index];
@@ -179,12 +160,12 @@ static irqreturn_t vmjpeg_isr(int irq, void *dev_id)
     u32 reg, offset, pts, pts_valid = 0;
     vframe_t *vf;
 
-    WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
 
-    reg = READ_VREG(MREG_FROM_AMRISC);
+    reg = READ_MPEG_REG(MREG_FROM_AMRISC);
 
     if (reg & PICINFO_BUF_IDX_MASK) {
-        offset = READ_VREG(MREG_FRAME_OFFSET);
+        offset = READ_MPEG_REG(MREG_FRAME_OFFSET);
 
         if (pts_lookup_offset(PTS_TYPE_VIDEO, offset, &pts, 0) == 0) {
             pts_valid = 1;
@@ -198,18 +179,14 @@ static irqreturn_t vmjpeg_isr(int irq, void *dev_id)
 
             set_frame_info(vf);
 
-#ifdef NV21
-            vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD | VIDTYPE_VIU_NV21;
-#else
             vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD;
-#endif
             vf->canvas0Addr = vf->canvas1Addr = index2canvas0(index);
             vf->pts = (pts_valid) ? pts : 0;
-			vf->orientation = 0 ;
+
             vfbuf_use[index]++;
 
             INCPTR(fill_ptr);
-            vf_notify_receiver(PROVIDER_NAME,VFRAME_EVENT_PROVIDER_VFRAME_READY,NULL);               
+		vf_notify_receiver(PROVIDER_NAME,VFRAME_EVENT_PROVIDER_VFRAME_READY,NULL);               
 
         } else {
             u32 index = ((reg & PICINFO_BUF_IDX_MASK) - 1) & 3;
@@ -236,12 +213,9 @@ static irqreturn_t vmjpeg_isr(int irq, void *dev_id)
             }
 
             vf->type |= VIDTYPE_VIU_FIELD;
-#ifdef NV21
-            vf->type |= VIDTYPE_VIU_NV21;
-#endif
             vf->duration >>= 1;
             vf->canvas0Addr = vf->canvas1Addr = index2canvas0(index);
-			vf->orientation = 0 ;
+
             if ((vf->type & VIDTYPE_INTERLACE_FIRST) && (pts_valid)) {
                 vf->pts = pts;
             } else {
@@ -253,14 +227,10 @@ static irqreturn_t vmjpeg_isr(int irq, void *dev_id)
             INCPTR(fill_ptr);
 #else
             /* send whole frame by weaving top & bottom field */
-#ifdef NV21
-            vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_NV21;
-#else
             vf->type = VIDTYPE_PROGRESSIVE;
-#endif
             vf->canvas0Addr = index2canvas0(index);
             vf->canvas1Addr = index2canvas1(index);
-			vf->orientation = 0 ;
+
             if (pts_valid) {
                 vf->pts = pts;
             } else {
@@ -274,7 +244,7 @@ static irqreturn_t vmjpeg_isr(int irq, void *dev_id)
 #endif
         }
 
-        WRITE_VREG(MREG_FROM_AMRISC, 0);
+        WRITE_MPEG_REG(MREG_FROM_AMRISC, 0);
     }
 
     return IRQ_HANDLED;
@@ -356,11 +326,11 @@ static void vmjpeg_put_timer_func(unsigned long arg)
 {
     struct timer_list *timer = (struct timer_list *)arg;
 
-    while ((putting_ptr != put_ptr) && (READ_VREG(MREG_TO_AMRISC) == 0)) {
+    while ((putting_ptr != put_ptr) && (READ_MPEG_REG(MREG_TO_AMRISC) == 0)) {
         u32 index = vfpool_idx[put_ptr];
 
         if (--vfbuf_use[index] == 0) {
-            WRITE_VREG(MREG_TO_AMRISC, index + 1);
+            WRITE_MPEG_REG(MREG_TO_AMRISC, index + 1);
         }
 
         INCPTR(put_ptr);
@@ -410,24 +380,6 @@ static void vmjpeg_canvas_init(void)
     }
 
     for (i = 0; i < 4; i++) {
-#ifdef NV21
-        canvas_config(2 * i + 0,
-                      buf_start + i * decbuf_size,
-                      canvas_width, canvas_height,
-                      CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_LINEAR);
-        canvas_config(2 * i + 1,
-                      buf_start + i * decbuf_size + decbuf_y_size,
-                      canvas_width, canvas_height / 2,
-                      CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_LINEAR);
-        canvas_config(2 * i + 0 + 12,
-                      buf_start + i * decbuf_size + decbuf_size / 2,
-                      canvas_width, canvas_height,
-                      CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_LINEAR);
-        canvas_config(2 * i + 1 + 12,
-                      buf_start + i * decbuf_size + decbuf_y_size + decbuf_uv_size / 2,
-                      canvas_width, canvas_height / 2,
-                      CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_LINEAR);
-#else
         canvas_config(3 * i + 0,
                       buf_start + i * decbuf_size,
                       canvas_width, canvas_height,
@@ -452,7 +404,6 @@ static void vmjpeg_canvas_init(void)
                       buf_start + i * decbuf_size + decbuf_y_size + decbuf_uv_size + decbuf_uv_size / 2,
                       canvas_width / 2, canvas_height / 2,
                       CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_LINEAR);
-#endif
     }
 }
 
@@ -473,119 +424,96 @@ static void init_scaler(void)
     int i;
 
     /* pscale enable, PSCALE cbus bmem enable */
-    WRITE_VREG(PSCALE_CTRL, 0xc000);
+    WRITE_MPEG_REG(PSCALE_CTRL, 0xc000);
 
     /* write filter coefs */
-    WRITE_VREG(PSCALE_BMEM_ADDR, 0);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, 0);
     for (i = 0; i < 33; i++) {
-        WRITE_VREG(PSCALE_BMEM_DAT, 0);
-        WRITE_VREG(PSCALE_BMEM_DAT, filt_coef[i]);
+        WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0);
+        WRITE_MPEG_REG(PSCALE_BMEM_DAT, filt_coef[i]);
     }
 
     /* Y horizontal initial info */
-    WRITE_VREG(PSCALE_BMEM_ADDR, 37 * 2);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, 37 * 2);
     /* [35]: buf repeat pix0,
      * [34:29] => buf receive num,
      * [28:16] => buf blk x,
      * [15:0] => buf phase
      */
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x0008);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x60000000);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x0008);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x60000000);
 
     /* C horizontal initial info */
-    WRITE_VREG(PSCALE_BMEM_ADDR, 41 * 2);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x0008);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x60000000);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, 41 * 2);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x0008);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x60000000);
 
     /* Y vertical initial info */
-    WRITE_VREG(PSCALE_BMEM_ADDR, 39 * 2);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x0008);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x60000000);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, 39 * 2);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x0008);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x60000000);
 
     /* C vertical initial info */
-    WRITE_VREG(PSCALE_BMEM_ADDR, 43 * 2);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x0008);
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x60000000);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, 43 * 2);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x0008);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x60000000);
 
     /* Y horizontal phase step */
-    WRITE_VREG(PSCALE_BMEM_ADDR, 36 * 2 + 1);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, 36 * 2 + 1);
     /* [19:0] => Y horizontal phase step */
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x10000);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x10000);
     /* C horizontal phase step */
-    WRITE_VREG(PSCALE_BMEM_ADDR, 40 * 2 + 1);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, 40 * 2 + 1);
     /* [19:0] => C horizontal phase step */
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x10000);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x10000);
 
     /* Y vertical phase step */
-    WRITE_VREG(PSCALE_BMEM_ADDR, 38 * 2 + 1);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, 38 * 2 + 1);
     /* [19:0] => Y vertical phase step */
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x10000);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x10000);
     /* C vertical phase step */
-    WRITE_VREG(PSCALE_BMEM_ADDR, 42 * 2 + 1);
+    WRITE_MPEG_REG(PSCALE_BMEM_ADDR, 42 * 2 + 1);
     /* [19:0] => C horizontal phase step */
-    WRITE_VREG(PSCALE_BMEM_DAT, 0x10000);
+    WRITE_MPEG_REG(PSCALE_BMEM_DAT, 0x10000);
 
     /* reset pscaler */
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-    WRITE_VREG(DOS_SW_RESET0, (1<<10));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-#else
     WRITE_MPEG_REG(RESET2_REGISTER, RESET_PSCALE);
-#endif
     READ_MPEG_REG(RESET2_REGISTER);
     READ_MPEG_REG(RESET2_REGISTER);
     READ_MPEG_REG(RESET2_REGISTER);
 
-    WRITE_VREG(PSCALE_RST, 0x7);
-    WRITE_VREG(PSCALE_RST, 0x0);
+    WRITE_MPEG_REG(PSCALE_RST, 0x7);
+    WRITE_MPEG_REG(PSCALE_RST, 0x0);
 }
 
 static void vmjpeg_prot_init(void)
 {
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-    WRITE_VREG(DOS_SW_RESET0, (1<<7) | (1<<6));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-#else
     WRITE_MPEG_REG(RESET0_REGISTER, RESET_IQIDCT | RESET_MC);
-#endif
 
     vmjpeg_canvas_init();
 
-    WRITE_VREG(AV_SCRATCH_0, 12);
-    WRITE_VREG(AV_SCRATCH_1, 0x031a);
-#ifdef NV21
-    WRITE_VREG(AV_SCRATCH_4, 0x010100);
-    WRITE_VREG(AV_SCRATCH_5, 0x030302);
-    WRITE_VREG(AV_SCRATCH_6, 0x050504);
-    WRITE_VREG(AV_SCRATCH_7, 0x070706);
-#else
-    WRITE_VREG(AV_SCRATCH_4, 0x020100);
-    WRITE_VREG(AV_SCRATCH_5, 0x050403);
-    WRITE_VREG(AV_SCRATCH_6, 0x080706);
-    WRITE_VREG(AV_SCRATCH_7, 0x0b0a09);
-#endif
+    WRITE_MPEG_REG(AV_SCRATCH_0, 12);
+    WRITE_MPEG_REG(AV_SCRATCH_1, 0x031a);
+    WRITE_MPEG_REG(AV_SCRATCH_4, 0x020100);
+    WRITE_MPEG_REG(AV_SCRATCH_5, 0x050403);
+    WRITE_MPEG_REG(AV_SCRATCH_6, 0x080706);
+    WRITE_MPEG_REG(AV_SCRATCH_7, 0x0b0a09);
+
     init_scaler();
 
     /* clear buffer IN/OUT registers */
-    WRITE_VREG(MREG_TO_AMRISC, 0);
-    WRITE_VREG(MREG_FROM_AMRISC, 0);
+    WRITE_MPEG_REG(MREG_TO_AMRISC, 0);
+    WRITE_MPEG_REG(MREG_FROM_AMRISC, 0);
 
-    WRITE_VREG(MCPU_INTR_MSK, 0xffff);
-    WRITE_VREG(MREG_DECODE_PARAM, (frame_height << 4) | 0x8000);
+    WRITE_MPEG_REG(MCPU_INTR_MSK, 0xffff);
+    WRITE_MPEG_REG(MREG_DECODE_PARAM, (frame_height << 4) | 0x8000);
 
     /* clear mailbox interrupt */
-    WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
     /* enable mailbox interrupt */
-    WRITE_VREG(ASSIST_MBOX1_MASK, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_MASK, 1);
     /* set interrupt mapping for vld */
-    WRITE_VREG(ASSIST_AMR1_INT8, 8);
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-#ifdef NV21
-    SET_VREG_MASK(MDEC_PIC_DC_CTRL, 1<<17);
-#else
-    CLEAR_VREG_MASK(MDEC_PIC_DC_CTRL, 1<<17);
-#endif
-#endif
+    WRITE_MPEG_REG(ASSIST_AMR1_INT8, 8);
 }
 
 static void vmjpeg_local_init(void)

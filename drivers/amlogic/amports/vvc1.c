@@ -25,20 +25,14 @@
 #include <linux/interrupt.h>
 #include <linux/timer.h>
 #include <linux/platform_device.h>
-#include <mach/am_regs.h>
-#include <plat/io.h>
 #include <linux/amports/amstream.h>
 #include <linux/amports/ptsserv.h>
 #include <linux/amports/canvas.h>
 #include <linux/amports/vframe.h>
 #include <linux/amports/vframe_provider.h>
 #include <linux/amports/vframe_receiver.h>
+#include <mach/am_regs.h>
 
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
-#include "vdec_reg.h"
 #include "amvdec.h"
 #include "vc1_mc.h"
 
@@ -47,9 +41,6 @@
 
 #define HANDLE_VC1_IRQ
 #define DEBUG_PTS
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-#define NV21
-#endif
 
 #define I_PICTURE   0
 #define P_PICTURE   1
@@ -82,13 +73,6 @@
 #define STAT_VF_HOOK        0x08
 #define STAT_TIMER_ARM      0x10
 #define STAT_VDEC_RUN       0x20
-
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-// TODO: move to register headers
-#define VPP_VD1_POSTBLEND       (1 << 10)
-#define MEM_FIFO_CNT_BIT        16
-#define MEM_LEVEL_CNT_BIT       18
-#endif
 
 static vframe_t *vvc1_vf_peek(void*);
 static vframe_t *vvc1_vf_get(void*);
@@ -138,11 +122,7 @@ static struct dec_sysinfo vvc1_amstream_dec_info;
 static inline u32 index2canvas(u32 index)
 {
     const u32 canvas_tab[4] = {
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-        0x010100, 0x030302, 0x050504, 0x070706
-#else
         0x020100, 0x050403, 0x080706, 0x0b0a09
-#endif
     };
 
     return canvas_tab[index];
@@ -238,11 +218,11 @@ static void vvc1_isr(void)
     u32 buffer_index;
     unsigned int pts, pts_valid = 0, offset;
 
-    reg = READ_VREG(VC1_BUFFEROUT);
+    reg = READ_MPEG_REG(VC1_BUFFEROUT);
 
     if (reg) {
         if (pts_by_offset) {
-            offset = READ_VREG(VC1_OFFSET_REG);
+            offset = READ_MPEG_REG(VC1_OFFSET_REG);
             if (pts_lookup_offset(PTS_TYPE_VIDEO, offset, &pts, 0) == 0) {
                 pts_valid = 1;
 #ifdef DEBUG_PTS
@@ -255,14 +235,14 @@ static void vvc1_isr(void)
             }
         }
 
-        repeat_count = READ_VREG(VC1_REPEAT_COUNT);
+        repeat_count = READ_MPEG_REG(VC1_REPEAT_COUNT);
         buffer_index = ((reg & 0x7) - 1) & 3;
         picture_type = (reg >> 3) & 7;
 
         if ((intra_output == 0) && (picture_type != 0)) {
-            WRITE_VREG(VC1_BUFFERIN, ~(1 << buffer_index));
-            WRITE_VREG(VC1_BUFFEROUT, 0);
-            WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+            WRITE_MPEG_REG(VC1_BUFFERIN, ~(1 << buffer_index));
+            WRITE_MPEG_REG(VC1_BUFFEROUT, 0);
+            WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
 
 #ifdef HANDLE_VC1_IRQ
             return IRQ_HANDLED;
@@ -272,10 +252,6 @@ static void vvc1_isr(void)
         }
 
         intra_output = 1;
-
-        if (picture_type == B_PICTURE) {
-            pts_valid = 0;
-        }
 
 #ifdef DEBUG_PTS
         if (picture_type == I_PICTURE) {
@@ -319,17 +295,14 @@ static void vvc1_isr(void)
 
             vf->duration_pulldown = 0;
             vf->type = (reg & BOTTOM_FIELD_FIRST_FLAG) ? VIDTYPE_INTERLACE_BOTTOM : VIDTYPE_INTERLACE_TOP;
-#ifdef NV21
-            vf->type |= VIDTYPE_VIU_NV21;
-#endif
             vf->canvas0Addr = vf->canvas1Addr = index2canvas(buffer_index);
-			vf->orientation = 0 ;
-            set_aspect_ratio(vf, READ_VREG(VC1_PIC_RATIO));
+
+            set_aspect_ratio(vf, READ_MPEG_REG(VC1_PIC_RATIO));
 
             vfbuf_use[buffer_index]++;
 
             INCPTR(fill_ptr);
-            vf_notify_receiver(PROVIDER_NAME,VFRAME_EVENT_PROVIDER_VFRAME_READY,NULL);
+		vf_notify_receiver(PROVIDER_NAME,VFRAME_EVENT_PROVIDER_VFRAME_READY,NULL);
             vfpool_idx[fill_ptr] = buffer_index;
             vf = &vfpool[fill_ptr];
             vf->width = vvc1_amstream_dec_info.width;
@@ -349,12 +322,9 @@ static void vvc1_isr(void)
 
             vf->duration_pulldown = 0;
             vf->type = (reg & BOTTOM_FIELD_FIRST_FLAG) ? VIDTYPE_INTERLACE_BOTTOM : VIDTYPE_INTERLACE_TOP;
-#ifdef NV21
-            vf->type |= VIDTYPE_VIU_NV21;
-#endif
             vf->canvas0Addr = vf->canvas1Addr = index2canvas(buffer_index);
-			vf->orientation = 0 ;
-            set_aspect_ratio(vf, READ_VREG(VC1_PIC_RATIO));
+
+            set_aspect_ratio(vf, READ_MPEG_REG(VC1_PIC_RATIO));
 
             vfbuf_use[buffer_index]++;
 
@@ -390,14 +360,10 @@ static void vvc1_isr(void)
             }
 
             vf->duration_pulldown = 0;
-#ifdef NV21
-            vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD | VIDTYPE_VIU_NV21;
-#else
             vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD;
-#endif
             vf->canvas0Addr = vf->canvas1Addr = index2canvas(buffer_index);
-			vf->orientation = 0 ;
-            set_aspect_ratio(vf, READ_VREG(VC1_PIC_RATIO));
+
+            set_aspect_ratio(vf, READ_MPEG_REG(VC1_PIC_RATIO));
 
             vfbuf_use[buffer_index]++;
 
@@ -408,10 +374,10 @@ static void vvc1_isr(void)
         total_frame++;
 
         //printk("PicType = %d, PTS = 0x%x, repeat count %d\n", picture_type, vf->pts, repeat_count);
-        WRITE_VREG(VC1_BUFFEROUT, 0);
+        WRITE_MPEG_REG(VC1_BUFFEROUT, 0);
     }
 
-    WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
 
 #ifdef HANDLE_VC1_IRQ
     return IRQ_HANDLED;
@@ -501,7 +467,7 @@ int vvc1_dec_status(struct vdec_status *vstatus)
     } else {
         vstatus->fps = 96000;
     }
-    vstatus->error_count = READ_VREG(AV_SCRATCH_4);
+    vstatus->error_count = READ_MPEG_REG(AV_SCRATCH_4);
     vstatus->status = stat;
 
     return 0;
@@ -540,16 +506,6 @@ static void vvc1_canvas_init(void)
 
     for (i = 0; i < 4; i++) {
         if (((buf_start + i * decbuf_size + 7) >> 3) == disp_addr) {
-#ifdef NV21
-            canvas_config(2 * i + 0,
-                          buf_start + 4 * decbuf_size,
-                          canvas_width, canvas_height,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-            canvas_config(2 * i + 1,
-                          buf_start + 4 * decbuf_size + decbuf_y_size,
-                          canvas_width, canvas_height / 2,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#else
             canvas_config(3 * i + 0,
                           buf_start + 4 * decbuf_size,
                           canvas_width, canvas_height,
@@ -562,18 +518,7 @@ static void vvc1_canvas_init(void)
                           buf_start + 4 * decbuf_size + decbuf_y_size + decbuf_uv_size,
                           canvas_width / 2, canvas_height / 2,
                           CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#endif
         } else {
-#ifdef NV21
-            canvas_config(2 * i + 0,
-                          buf_start + i * decbuf_size,
-                          canvas_width, canvas_height,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-            canvas_config(2 * i + 1,
-                          buf_start + i * decbuf_size + decbuf_y_size,
-                          canvas_width, canvas_height / 2,
-                          CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#else
             canvas_config(3 * i + 0,
                           buf_start + i * decbuf_size,
                           canvas_width, canvas_height,
@@ -586,71 +531,46 @@ static void vvc1_canvas_init(void)
                           buf_start + i * decbuf_size + decbuf_y_size + decbuf_uv_size,
                           canvas_width / 2, canvas_height / 2,
                           CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32);
-#endif
         }
     }
 }
 
 static void vvc1_prot_init(void)
 {
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6  
-    WRITE_VREG(DOS_SW_RESET0, (1<<7) | (1<<6) | (1<<4));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-
-    READ_VREG(DOS_SW_RESET0);
-
-    WRITE_VREG(DOS_SW_RESET0, (1<<7) | (1<<6) | (1<<4));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-
-    WRITE_VREG(DOS_SW_RESET0, (1<<9) | (1<<8));
-    WRITE_VREG(DOS_SW_RESET0, 0);
-
-#else
     WRITE_MPEG_REG(RESET0_REGISTER, RESET_IQIDCT | RESET_MC | RESET_VLD_PART);
     READ_MPEG_REG(RESET0_REGISTER);
     WRITE_MPEG_REG(RESET0_REGISTER, RESET_IQIDCT | RESET_MC | RESET_VLD_PART);
 
     WRITE_MPEG_REG(RESET2_REGISTER, RESET_PIC_DC | RESET_DBLK);
-#endif
 
-    WRITE_VREG(POWER_CTL_VLD, 0x10);
-    WRITE_VREG_BITS(VLD_MEM_VIFIFO_CONTROL, 2, MEM_FIFO_CNT_BIT, 2);
-    WRITE_VREG_BITS(VLD_MEM_VIFIFO_CONTROL, 8, MEM_LEVEL_CNT_BIT, 6);
+    WRITE_MPEG_REG(POWER_CTL_VLD, 0x10);
+    WRITE_MPEG_REG_BITS(VLD_MEM_VIFIFO_CONTROL, 2, MEM_FIFO_CNT_BIT, 2);
+    WRITE_MPEG_REG_BITS(VLD_MEM_VIFIFO_CONTROL, 8, MEM_LEVEL_CNT_BIT, 6);
 
     vvc1_canvas_init();
 
     /* index v << 16 | u << 8 | y */
-#ifdef NV21
-    WRITE_VREG(AV_SCRATCH_0, 0x010100);
-    WRITE_VREG(AV_SCRATCH_1, 0x030302);
-    WRITE_VREG(AV_SCRATCH_2, 0x050504);
-    WRITE_VREG(AV_SCRATCH_3, 0x070706);
-#else
-    WRITE_VREG(AV_SCRATCH_0, 0x020100);
-    WRITE_VREG(AV_SCRATCH_1, 0x050403);
-    WRITE_VREG(AV_SCRATCH_2, 0x080706);
-    WRITE_VREG(AV_SCRATCH_3, 0x0b0a09);
-#endif
+    WRITE_MPEG_REG(AV_SCRATCH_0, 0x020100);
+    WRITE_MPEG_REG(AV_SCRATCH_1, 0x050403);
+    WRITE_MPEG_REG(AV_SCRATCH_2, 0x080706);
+    WRITE_MPEG_REG(AV_SCRATCH_3, 0x0b0a09);
 
     /* notify ucode the buffer offset */
-    WRITE_VREG(AV_SCRATCH_F, buf_offset);
+    WRITE_MPEG_REG(AV_SCRATCH_F, buf_offset);
 
     /* disable PSCALE for hardware sharing */
-    WRITE_VREG(PSCALE_CTRL, 0);
+    WRITE_MPEG_REG(PSCALE_CTRL, 0);
 
-    WRITE_VREG(VC1_SOS_COUNT, 0);
-    WRITE_VREG(VC1_BUFFERIN, 0);
-    WRITE_VREG(VC1_BUFFEROUT, 0);
+    WRITE_MPEG_REG(VC1_SOS_COUNT, 0);
+    WRITE_MPEG_REG(VC1_BUFFERIN, 0);
+    WRITE_MPEG_REG(VC1_BUFFEROUT, 0);
 
     /* clear mailbox interrupt */
-    WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
 
     /* enable mailbox interrupt */
-    WRITE_VREG(ASSIST_MBOX1_MASK, 1);
+    WRITE_MPEG_REG(ASSIST_MBOX1_MASK, 1);
 
-#ifdef NV21
-    SET_VREG_MASK(MDEC_PIC_DC_CTRL, 1<<17);
-#endif
 }
 
 static void vvc1_local_init(void)
@@ -701,7 +621,7 @@ static void vvc1_put_timer_func(unsigned long arg)
 #endif
 
 #if 1
-    if (READ_VREG(VC1_SOS_COUNT) > 10) {
+    if (READ_MPEG_REG(VC1_SOS_COUNT) > 10) {
         amvdec_stop();
 #ifdef CONFIG_POST_PROCESS_MANAGER
         vvc1_ppmgr_reset();
@@ -715,11 +635,11 @@ static void vvc1_put_timer_func(unsigned long arg)
     }
 #endif
 
-    if ((putting_ptr != put_ptr) && (READ_VREG(VC1_BUFFERIN) == 0)) {
+    if ((putting_ptr != put_ptr) && (READ_MPEG_REG(VC1_BUFFERIN) == 0)) {
         u32 index = vfpool_idx[put_ptr];
 
         if (--vfbuf_use[index] == 0) {
-            WRITE_VREG(VC1_BUFFERIN, ~(1 << index));
+            WRITE_MPEG_REG(VC1_BUFFERIN, ~(1 << index));
         }
 
         INCPTR(put_ptr);
@@ -745,11 +665,11 @@ static s32 vvc1_init(void)
     if (vvc1_amstream_dec_info.format == VIDEO_DEC_FORMAT_WMV3) {
         printk("WMV3 dec format\n");
         vvc1_format = VIDEO_DEC_FORMAT_WMV3;
-        WRITE_VREG(AV_SCRATCH_4, 0);
+        WRITE_MPEG_REG(AV_SCRATCH_4, 0);
     } else if (vvc1_amstream_dec_info.format == VIDEO_DEC_FORMAT_WVC1) {
         printk("WVC1 dec format\n");
         vvc1_format = VIDEO_DEC_FORMAT_WVC1;
-        WRITE_VREG(AV_SCRATCH_4, 1);
+        WRITE_MPEG_REG(AV_SCRATCH_4, 1);
     } else {
         printk("not supported VC1 format\n");
     }
@@ -879,15 +799,15 @@ static struct platform_driver amvdec_vc1_driver = {
     }
 };
 
-#if defined(CONFIG_ARCH_MESON)/*meson1 only support progressive*/
+#ifdef CONFIG_ARCH_MESON3
 static struct codec_profile_t amvdec_vc1_profile = {
 	.name = "vc1",
-	.profile = "progressive, wmv3"
+	.profile = "progressive, interlace, wmv3"
 };
 #else
 static struct codec_profile_t amvdec_vc1_profile = {
 	.name = "vc1",
-	.profile = "progressive, interlace, wmv3"
+	.profile = "progressive, wmv3"
 };
 #endif
 

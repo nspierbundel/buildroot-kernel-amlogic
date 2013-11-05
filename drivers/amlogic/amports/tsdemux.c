@@ -34,15 +34,6 @@
 #include <asm/uaccess.h>
 #include <mach/am_regs.h>
 
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-#include <mach/mod_gate.h>
-#endif
-
-#include "vdec_reg.h"
 #include "streambuf_reg.h"
 #include "streambuf.h"
 
@@ -63,6 +54,10 @@ static irq_handler_t       demux_handler;
 static void               *demux_data;
 static DEFINE_SPINLOCK(demux_ops_lock);
 
+static int aud_pid = 0xffff;
+static int vid_pid = 0xffff;
+static int sub_pid = 0xffff;
+
 void tsdemux_set_ops(struct tsdemux_ops *ops)
 {
     unsigned long flags;
@@ -74,27 +69,18 @@ void tsdemux_set_ops(struct tsdemux_ops *ops)
 
 EXPORT_SYMBOL(tsdemux_set_ops);
 
-int tsdemux_set_reset_flag_ext(void)
-{
-    int r;
-
-    if (demux_ops && demux_ops->set_reset_flag) {
-        r = demux_ops->set_reset_flag();
-    } else {
-        WRITE_MPEG_REG(FEC_INPUT_CONTROL, 0);
-        r = 0;
-    }
-
-    return r;
-}
-
 int tsdemux_set_reset_flag(void)
 {
     unsigned long flags;
     int r;
 
     spin_lock_irqsave(&demux_ops_lock, flags);
-    r = tsdemux_set_reset_flag_ext();
+    if (demux_ops && demux_ops->set_reset_flag) {
+        r = demux_ops->set_reset_flag();
+    } else {
+        WRITE_MPEG_REG(FEC_INPUT_CONTROL, 0);
+        r = 0;
+    }
     spin_unlock_irqrestore(&demux_ops_lock, flags);
 
     return r;
@@ -107,7 +93,7 @@ static int tsdemux_reset(void)
 
     spin_lock_irqsave(&demux_ops_lock, flags);
     if (demux_ops && demux_ops->reset) {
-        tsdemux_set_reset_flag_ext();
+        tsdemux_set_reset_flag();
         r = demux_ops->reset();
     } else {
         WRITE_MPEG_REG(RESET1_REGISTER, RESET_DEMUXSTB);
@@ -179,6 +165,10 @@ static int tsdemux_set_vid(int vpid)
     unsigned long flags;
     int r = 0;
 
+    if(vpid == vid_pid){
+        return r;
+    }
+
     spin_lock_irqsave(&demux_ops_lock, flags);
     if (demux_ops && demux_ops->set_vid) {
         r = demux_ops->set_vid(vpid);
@@ -194,6 +184,7 @@ static int tsdemux_set_vid(int vpid)
         WRITE_MPEG_REG(MAX_FM_COMP_ADDR, 1);
         r = 0;
     }
+    vid_pid = vpid;
     spin_unlock_irqrestore(&demux_ops_lock, flags);
 
     return r;
@@ -203,6 +194,10 @@ static int tsdemux_set_aid(int apid)
 {
     unsigned long flags;
     int r = 0;
+
+    if(apid==aud_pid){
+        return r;
+    }
 
     spin_lock_irqsave(&demux_ops_lock, flags);
     if (demux_ops && demux_ops->set_aid) {
@@ -219,6 +214,7 @@ static int tsdemux_set_aid(int apid)
         WRITE_MPEG_REG(MAX_FM_COMP_ADDR, 1);
         r = 0;
     }
+    aud_pid = apid;
     spin_unlock_irqrestore(&demux_ops_lock, flags);
 
     return r;
@@ -228,6 +224,10 @@ static int tsdemux_set_sid(int spid)
 {
     unsigned long flags;
     int r = 0;
+
+    if(spid==sub_pid){
+        return r;
+    }
 
     spin_lock_irqsave(&demux_ops_lock, flags);
     if (demux_ops && demux_ops->set_sid) {
@@ -242,11 +242,11 @@ static int tsdemux_set_sid(int spid)
         WRITE_MPEG_REG(MAX_FM_COMP_ADDR, 1);
         r = 0;
     }
+    sub_pid = spid;
     spin_unlock_irqrestore(&demux_ops_lock, flags);
 
     return r;
 }
-
 static int tsdemux_set_skip_byte(int skipbyte)
 {
     unsigned long flags;
@@ -390,9 +390,7 @@ static ssize_t _tsdemux_write(const char __user *buf, size_t count)
     if (r > 0) {
         len = min(r, (size_t)FETCHBUF_SIZE);
 
-        if (copy_from_user(fetchbuf_remap, p, len)) {
-            return -EFAULT;
-        }
+        copy_from_user(fetchbuf_remap, p, len);
 
         fetch_done = 0;
 
@@ -402,7 +400,7 @@ static ssize_t _tsdemux_write(const char __user *buf, size_t count)
         
         WRITE_MPEG_REG(PARSER_FETCH_CMD, (7 << FETCH_ENDIAN) | len);
 
-        ret = wait_event_interruptible_timeout(wq, fetch_done != 0, HZ/2);
+        ret = wait_event_interruptible_timeout(wq, fetch_done != 0, HZ);
         if (ret == 0) {
             WRITE_MPEG_REG(PARSER_FETCH_CMD, 0);
 			printk("write timeout, retry\n");
@@ -425,10 +423,6 @@ s32 tsdemux_init(u32 vid, u32 aid, u32 sid)
     u32 parser_sub_end_ptr;
     u32 parser_sub_rp;
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-    switch_mod_gate_by_type(MOD_DEMUX, 1);
-#endif
-
     parser_sub_start_ptr = READ_MPEG_REG(PARSER_SUB_START_PTR);
     parser_sub_end_ptr = READ_MPEG_REG(PARSER_SUB_END_PTR);
     parser_sub_rp = READ_MPEG_REG(PARSER_SUB_RP);
@@ -447,7 +441,6 @@ s32 tsdemux_init(u32 vid, u32 aid, u32 sid)
     /* set PID filter */
     printk("tsdemux video_pid = 0x%x, audio_pid = 0x%x, sub_pid = 0x%x\n",
            vid, aid, sid);
-
 #ifndef ENABLE_DEMUX_DRIVER
     WRITE_MPEG_REG(FM_WR_DATA,
                    (((vid & 0x1fff) | (VIDEO_PACKET << 13)) << 16) |
@@ -498,9 +491,9 @@ s32 tsdemux_init(u32 vid, u32 aid, u32 sid)
 
     /* hook stream buffer with PARSER */
     WRITE_MPEG_REG(PARSER_VIDEO_START_PTR,
-                   READ_VREG(VLD_MEM_VIFIFO_START_PTR));
+                   READ_MPEG_REG(VLD_MEM_VIFIFO_START_PTR));
     WRITE_MPEG_REG(PARSER_VIDEO_END_PTR,
-                   READ_VREG(VLD_MEM_VIFIFO_END_PTR));
+                   READ_MPEG_REG(VLD_MEM_VIFIFO_END_PTR));
     CLEAR_MPEG_REG_MASK(PARSER_ES_CONTROL, ES_VID_MAN_RD_PTR);
 
     WRITE_MPEG_REG(PARSER_AUDIO_START_PTR,
@@ -514,8 +507,8 @@ s32 tsdemux_init(u32 vid, u32 aid, u32 sid)
                    (1  << PS_CFG_MAX_ES_WR_CYCLE_BIT) |
                    (16 << PS_CFG_MAX_FETCH_CYCLE_BIT));
 
-    WRITE_VREG(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
-    CLEAR_VREG_MASK(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
+    WRITE_MPEG_REG(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
+    CLEAR_MPEG_REG_MASK(VLD_MEM_VIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
 
     WRITE_MPEG_REG(AIU_MEM_AIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
     CLEAR_MPEG_REG_MASK(AIU_MEM_AIFIFO_BUF_CNTL, MEM_BUFCTRL_INIT);
@@ -615,10 +608,6 @@ void tsdemux_release(void)
     pts_stop(PTS_TYPE_VIDEO);
     pts_stop(PTS_TYPE_AUDIO);
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-    switch_mod_gate_by_type(MOD_DEMUX, 0);
-#endif
-
 }
 
 ssize_t tsdemux_write(struct file *file,
@@ -633,30 +622,26 @@ ssize_t tsdemux_write(struct file *file,
     if ((stbuf_space(vbuf) < count) ||
         (stbuf_space(abuf) < count)) {
         if (file->f_flags & O_NONBLOCK) {
-	      write_size=min(stbuf_space(vbuf), stbuf_space(abuf));
-	      if(write_size<=188)/*have 188 bytes,write now., */
-			return -EAGAIN;
-        }else{
-	        wait_size = min(stbuf_canusesize(vbuf) / 8, stbuf_canusesize(abuf) / 4);
-	        if ((port->flag & PORT_FLAG_VID)
-	            && (stbuf_space(vbuf) < wait_size)) {
-	            r = stbuf_wait_space(vbuf, wait_size);
+            return -EAGAIN;
+        }
 
-	            if (r < 0) {
-					printk("write no space--- no space,%d--%d,r-%d\n",stbuf_space(vbuf),stbuf_space(abuf),r);
-	                return r;
-	            }
-	        }
+        wait_size = min(stbuf_size(vbuf) / 8, stbuf_size(abuf) / 4);
+        if ((port->flag & PORT_FLAG_VID)
+            && (stbuf_space(vbuf) < wait_size)) {
+            r = stbuf_wait_space(vbuf, wait_size);
 
-	        if ((port->flag & PORT_FLAG_AID)
-	            && (stbuf_space(abuf) < wait_size)) {
-	            r = stbuf_wait_space(abuf, wait_size);
+            if (r < 0) {
+                return r;
+            }
+        }
 
-	            if (r < 0) {
-					printk("write no stbuf_wait_space--- no space,%d--%d,r-%d\n",stbuf_space(vbuf),stbuf_space(abuf),r);
-	                return r;
-	            }
-	        }
+        if ((port->flag & PORT_FLAG_AID)
+            && (stbuf_space(abuf) < wait_size)) {
+            r = stbuf_wait_space(abuf, wait_size);
+
+            if (r < 0) {
+                return r;
+            }
         }
     }
     write_size = min(stbuf_space(vbuf), stbuf_space(abuf));
@@ -733,8 +718,9 @@ void tsdemux_change_sid(unsigned int sid)
 void tsdemux_audio_reset(void)
 {
     ulong flags;
-	DEFINE_SPINLOCK(lock);
 
+    DEFINE_SPINLOCK(lock);
+    
     spin_lock_irqsave(&lock, flags);
 
     WRITE_MPEG_REG(PARSER_AUDIO_WP,
@@ -759,7 +745,7 @@ void tsdemux_audio_reset(void)
 void tsdemux_sub_reset(void)
 {
     ulong flags;
-	DEFINE_SPINLOCK(lock);
+    DEFINE_SPINLOCK(lock);
     u32 parser_sub_start_ptr;
     u32 parser_sub_end_ptr;
 
