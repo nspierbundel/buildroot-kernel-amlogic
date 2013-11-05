@@ -525,7 +525,7 @@ const static struct file_operations amjpegdec_fops = {
     .open     = amjpegdec_open,
     .mmap     = mmap,
     .release  = amjpegdec_release,
-    .ioctl    = amjpegdec_ioctl,
+    .unlocked_ioctl    = amjpegdec_ioctl,
 };
 int HWJPEGDEC_MAJOR = 0;
 static int amjpegdec_probe(struct platform_device *pdev)
