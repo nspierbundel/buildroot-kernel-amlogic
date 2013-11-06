@@ -65,7 +65,7 @@ struct xc5000_priv {
 };
 
 /* Misc Defines */
-#define MAX_TV_STANDARD			24
+#define MAX_TV_STANDARD			23
 #define XC_MAX_I2C_WRITE_LENGTH		64
 
 /* Signal Types */
@@ -92,8 +92,6 @@ struct xc5000_priv {
 #define XREG_IF_OUT       0x05
 #define XREG_SEEK_MODE    0x07
 #define XREG_POWER_DOWN   0x0A /* Obsolete */
-/* Set the output amplitude - SIF for analog, DTVP/DTVN for digital */
-#define XREG_OUTPUT_AMP   0x0B
 #define XREG_SIGNALSOURCE 0x0D /* 0=Air, 1=Cable */
 #define XREG_SMOOTHEDCVBS 0x0E
 #define XREG_XTALFREQ     0x0F
@@ -175,7 +173,6 @@ struct XC_TV_STANDARD {
 #define DTV7			20
 #define FM_Radio_INPUT2 	21
 #define FM_Radio_INPUT1 	22
-#define FM_Radio_INPUT1_MONO	23
 
 static struct XC_TV_STANDARD XC5000_Standard[MAX_TV_STANDARD] = {
 	{"M/N-NTSC/PAL-BTSC", 0x0400, 0x8020},
@@ -200,8 +197,7 @@ static struct XC_TV_STANDARD XC5000_Standard[MAX_TV_STANDARD] = {
 	{"DTV7/8",            0x00C0, 0x801B},
 	{"DTV7",              0x00C0, 0x8007},
 	{"FM Radio-INPUT2",   0x9802, 0x9002},
-	{"FM Radio-INPUT1",   0x0208, 0x9002},
-	{"FM Radio-INPUT1_MONO", 0x0278, 0x9002}
+	{"FM Radio-INPUT1",   0x0208, 0x9002}
 };
 
 static int xc_load_fw_and_init_tuner(struct dvb_frontend *fe);
@@ -221,7 +217,6 @@ static int xc_send_i2c_data(struct xc5000_priv *priv, u8 *buf, int len)
 	return XC_RESULT_SUCCESS;
 }
 
-#if 0
 /* This routine is never used because the only time we read data from the
    i2c bus is when we read registers, and we want that to be an atomic i2c
    transaction in case we are on a multi-master bus */
@@ -235,27 +230,6 @@ static int xc_read_i2c_data(struct xc5000_priv *priv, u8 *buf, int len)
 		return -EREMOTEIO;
 	}
 	return 0;
-}
-#endif
-
-static int xc5000_readreg(struct xc5000_priv *priv, u16 reg, u16 *val)
-{
-	u8 buf[2] = { reg >> 8, reg & 0xff };
-	u8 bval[2] = { 0, 0 };
-	struct i2c_msg msg[2] = {
-		{ .addr = priv->i2c_props.addr,
-			.flags = 0, .buf = &buf[0], .len = 2 },
-		{ .addr = priv->i2c_props.addr,
-			.flags = I2C_M_RD, .buf = &bval[0], .len = 2 },
-	};
-
-	if (i2c_transfer(priv->i2c_props.adap, msg, 2) != 2) {
-		printk(KERN_WARNING "xc5000: I2C read failed\n");
-		return -EREMOTEIO;
-	}
-
-	*val = (bval[0] << 8) | bval[1];
-	return XC_RESULT_SUCCESS;
 }
 
 static void xc_wait(int wait_ms)
@@ -301,14 +275,20 @@ static int xc_write_reg(struct xc5000_priv *priv, u16 regAddr, u16 i2cData)
 	if (result == XC_RESULT_SUCCESS) {
 		/* wait for busy flag to clear */
 		while ((WatchDogTimer > 0) && (result == XC_RESULT_SUCCESS)) {
-			result = xc5000_readreg(priv, XREG_BUSY, (u16 *)buf);
+			buf[0] = 0;
+			buf[1] = XREG_BUSY;
+
+			result = xc_send_i2c_data(priv, buf, 2);
 			if (result == XC_RESULT_SUCCESS) {
-				if ((buf[0] == 0) && (buf[1] == 0)) {
-					/* busy flag cleared */
+				result = xc_read_i2c_data(priv, buf, 2);
+				if (result == XC_RESULT_SUCCESS) {
+					if ((buf[0] == 0) && (buf[1] == 0)) {
+						/* busy flag cleared */
 					break;
-				} else {
-					xc_wait(5); /* wait 5 ms */
-					WatchDogTimer--;
+					} else {
+						xc_wait(5); /* wait 5 ms */
+						WatchDogTimer--;
+					}
 				}
 			}
 		}
@@ -546,6 +526,25 @@ static int xc_tune_channel(struct xc5000_priv *priv, u32 freq_hz, int mode)
 	return found;
 }
 
+static int xc5000_readreg(struct xc5000_priv *priv, u16 reg, u16 *val)
+{
+	u8 buf[2] = { reg >> 8, reg & 0xff };
+	u8 bval[2] = { 0, 0 };
+	struct i2c_msg msg[2] = {
+		{ .addr = priv->i2c_props.addr,
+			.flags = 0, .buf = &buf[0], .len = 2 },
+		{ .addr = priv->i2c_props.addr,
+			.flags = I2C_M_RD, .buf = &bval[0], .len = 2 },
+	};
+
+	if (i2c_transfer(priv->i2c_props.adap, msg, 2) != 2) {
+		printk(KERN_WARNING "xc5000: I2C read failed\n");
+		return -EREMOTEIO;
+	}
+
+	*val = (bval[0] << 8) | bval[1];
+	return XC_RESULT_SUCCESS;
+}
 
 static int xc5000_fwupload(struct dvb_frontend *fe)
 {
@@ -628,15 +627,6 @@ static void xc_debug_dump(struct xc5000_priv *priv)
 	dprintk(1, "*** Quality (0:<8dB, 7:>56dB) = %d\n", quality);
 }
 
-/*
- * As defined on EN 300 429, the DVB-C roll-off factor is 0.15.
- * So, the amount of the needed bandwith is given by:
- * 	Bw = Symbol_rate * (1 + 0.15)
- * As such, the maximum symbol rate supported by 6 MHz is given by:
- *	max_symbol_rate = 6 MHz / 1.15 = 5217391 Bauds
- */
-#define MAX_SYMBOL_RATE_6MHz	5217391
-
 static int xc5000_set_params(struct dvb_frontend *fe,
 	struct dvb_frontend_parameters *params)
 {
@@ -696,35 +686,6 @@ static int xc5000_set_params(struct dvb_frontend *fe,
 			return -EINVAL;
 		}
 		priv->rf_mode = XC_RF_MODE_AIR;
-	} else if (fe->ops.info.type == FE_QAM) {
-		switch (params->u.qam.modulation) {
-		case QAM_256:
-		case QAM_AUTO:
-		case QAM_16:
-		case QAM_32:
-		case QAM_64:
-		case QAM_128:
-			dprintk(1, "%s() QAM modulation\n", __func__);
-			priv->rf_mode = XC_RF_MODE_CABLE;
-			/*
-			 * Using a 8MHz bandwidth sometimes fail
-			 * with 6MHz-spaced channels, due to inter-carrier
-			 * interference. So, use DTV6 firmware
-			 */
-			if (params->u.qam.symbol_rate <= MAX_SYMBOL_RATE_6MHz) {
-				priv->bandwidth = BANDWIDTH_6_MHZ;
-				priv->video_standard = DTV6;
-				priv->freq_hz = params->frequency - 1750000;
-			} else {
-				priv->bandwidth = BANDWIDTH_8_MHZ;
-				priv->video_standard = DTV7_8;
-				priv->freq_hz = params->frequency - 2750000;
-			}
-			break;
-		default:
-			dprintk(1, "%s() Unsupported QAM type\n", __func__);
-			return -EINVAL;
-		}
 	} else {
 		printk(KERN_ERR "xc5000 modulation type not supported!\n");
 		return -EINVAL;
@@ -755,8 +716,6 @@ static int xc5000_set_params(struct dvb_frontend *fe,
 		       priv->if_khz);
 		return -EIO;
 	}
-
-	xc_write_reg(priv, XREG_OUTPUT_AMP, 0x8a);
 
 	xc_tune_channel(priv, priv->freq_hz, XC_TUNE_DIGITAL);
 
@@ -862,8 +821,6 @@ tune_channel:
 		return -EREMOTEIO;
 	}
 
-	xc_write_reg(priv, XREG_OUTPUT_AMP, 0x09);
-
 	xc_tune_channel(priv, priv->freq_hz, XC_TUNE_ANALOG);
 
 	if (debug)
@@ -891,8 +848,6 @@ static int xc5000_set_radio_freq(struct dvb_frontend *fe,
 		radio_input = FM_Radio_INPUT1;
 	else if  (priv->radio_input == XC5000_RADIO_FM2)
 		radio_input = FM_Radio_INPUT2;
-	else if  (priv->radio_input == XC5000_RADIO_FM1_MONO)
-		radio_input = FM_Radio_INPUT1_MONO;
 	else {
 		dprintk(1, "%s() unknown radio input %d\n", __func__,
 			priv->radio_input);
@@ -918,12 +873,6 @@ static int xc5000_set_radio_freq(struct dvb_frontend *fe,
 			priv->rf_mode);
 		return -EREMOTEIO;
 	}
-
-	if ((priv->radio_input == XC5000_RADIO_FM1) ||
-				(priv->radio_input == XC5000_RADIO_FM2))
-		xc_write_reg(priv, XREG_OUTPUT_AMP, 0x09);
-	else if  (priv->radio_input == XC5000_RADIO_FM1_MONO)
-		xc_write_reg(priv, XREG_OUTPUT_AMP, 0x06);
 
 	xc_tune_channel(priv, priv->freq_hz, XC_TUNE_ANALOG);
 
@@ -1075,23 +1024,6 @@ static int xc5000_release(struct dvb_frontend *fe)
 	return 0;
 }
 
-static int xc5000_set_config(struct dvb_frontend *fe, void *priv_cfg)
-{
-	struct xc5000_priv *priv = fe->tuner_priv;
-	struct xc5000_config *p = priv_cfg;
-
-	dprintk(1, "%s()\n", __func__);
-
-	if (p->if_khz)
-		priv->if_khz = p->if_khz;
-
-	if (p->radio_input)
-		priv->radio_input = p->radio_input;
-
-	return 0;
-}
-
-
 static const struct dvb_tuner_ops xc5000_tuner_ops = {
 	.info = {
 		.name           = "Xceive XC5000",
@@ -1104,7 +1036,6 @@ static const struct dvb_tuner_ops xc5000_tuner_ops = {
 	.init		   = xc5000_init,
 	.sleep		   = xc5000_sleep,
 
-	.set_config	   = xc5000_set_config,
 	.set_params	   = xc5000_set_params,
 	.set_analog_params = xc5000_set_analog_params,
 	.get_frequency	   = xc5000_get_frequency,
@@ -1114,7 +1045,7 @@ static const struct dvb_tuner_ops xc5000_tuner_ops = {
 
 struct dvb_frontend *xc5000_attach(struct dvb_frontend *fe,
 				   struct i2c_adapter *i2c,
-				   const struct xc5000_config *cfg)
+				   struct xc5000_config *cfg)
 {
 	struct xc5000_priv *priv = NULL;
 	int instance;

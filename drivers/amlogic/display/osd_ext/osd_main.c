@@ -52,9 +52,6 @@
 static struct early_suspend early_suspend;
 static int early_suspend_flag = 0;
 #endif
-#ifdef CONFIG_SCREEN_ON_EARLY
-static int early_resume_flag = 0;
-#endif
 
 MODULE_AMLOG(AMLOG_DEFAULT_LEVEL, 0x0, LOG_LEVEL_DESC, LOG_MASK_DESC);
 
@@ -264,26 +261,26 @@ osd_ext_ioctl(struct fb_info *info, unsigned int cmd,
 	s32 osd_ext_axis[4] = {0};
 	u32 block_windows[8] = {0};
 	u32 block_mode;
-	unsigned long ret;
 
 	switch (cmd) {
 	case  FBIOPUT_OSD_SRCKEY_ENABLE:
-		ret = copy_from_user(&srckey_enable, argp, sizeof(u32));
+		copy_from_user(&srckey_enable, argp, sizeof(u32));
 		break;
 	case  FBIOPUT_OSD_SRCCOLORKEY:
-		ret = copy_from_user(&src_colorkey, argp, sizeof(u32));
+		copy_from_user(&src_colorkey, argp, sizeof(u32));
 		break ;
 	case FBIOPUT_OSD_SET_GBL_ALPHA:
-		ret = copy_from_user(&gbl_alpha, argp, sizeof(u32));
+		copy_from_user(&gbl_alpha, argp, sizeof(u32));
 		break;
 	case FBIOPUT_OSD_SCALE_AXIS:
-		ret = copy_from_user(&osd_ext_axis, argp, 4 * sizeof(s32));
+		copy_from_user(&osd_ext_axis, argp, 4 * sizeof(s32));
 		break;
 	case FBIOGET_OSD_SCALE_AXIS:
 	case FBIOPUT_OSD_ORDER:
 	case FBIOGET_OSD_ORDER:
 	case FBIOGET_OSD_GET_GBL_ALPHA:
 	case FBIOPUT_OSD_2X_SCALE:
+	case FBIOPUT_OSD_CANVAS_CONF:
 	case FBIOPUT_OSD_ENABLE_3D_MODE:
 	case FBIOPUT_OSD_FREE_SCALE_ENABLE:
 	case FBIOPUT_OSD_FREE_SCALE_WIDTH:
@@ -291,15 +288,16 @@ osd_ext_ioctl(struct fb_info *info, unsigned int cmd,
 	case FBIOGET_OSD_BLOCK_WINDOWS:
 	case FBIOGET_OSD_BLOCK_MODE:
 	case FBIOGET_OSD_FREE_SCALE_AXIS:
+	case FBIOPUT_OSD_ENFORCE_PROGRESSIVE:
 		break;
 	case FBIOPUT_OSD_BLOCK_MODE:
 		block_mode = (u32)argp;
 		break;
 	case FBIOPUT_OSD_BLOCK_WINDOWS:
-		ret = copy_from_user(&block_windows, argp, 8 * sizeof(u32));
+		copy_from_user(&block_windows, argp, 8 * sizeof(u32));
 		break;
 	case FBIOPUT_OSD_FREE_SCALE_AXIS:
-		ret = copy_from_user(&osd_ext_axis, argp, 4 * sizeof(s32));
+		copy_from_user(&osd_ext_axis, argp, 4 * sizeof(s32));
 		break;
 	default :
 		amlog_mask_level(LOG_MASK_IOCTL, LOG_LEVEL_HIGH, "command not supported\r\n ");
@@ -313,7 +311,7 @@ osd_ext_ioctl(struct fb_info *info, unsigned int cmd,
 		break;
 	case FBIOGET_OSD_ORDER:
 		osd_ext_order = osddev_ext_get_osd_ext_order(info->node);
-		ret = copy_to_user(argp, &osd_ext_order, sizeof(u32));
+		copy_to_user(argp, &osd_ext_order, sizeof(u32));
 		break;
 	case FBIOPUT_OSD_FREE_SCALE_WIDTH:
 		osddev_ext_free_scale_width(info->node, arg);
@@ -330,6 +328,8 @@ osd_ext_ioctl(struct fb_info *info, unsigned int cmd,
 	case FBIOPUT_OSD_2X_SCALE: //arg :higher 16 bit h_scale_enable, lower 16 bit v_scale_enable
 		osddev_ext_set_2x_scale(info->node, arg & 0xffff0000 ? 1 : 0, arg & 0xffff ? 1 : 0);
 		break;
+	case FBIOPUT_OSD_CANVAS_CONF:
+		osddev_ext_set_canvas_conf(info->node, arg);
 	case FBIOPUT_OSD_SRCCOLORKEY:
 		switch (fbdev->color->color_index) {
 		case COLOR_INDEX_16_655:
@@ -375,19 +375,19 @@ osd_ext_ioctl(struct fb_info *info, unsigned int cmd,
 		break;
 	case  FBIOGET_OSD_GET_GBL_ALPHA:
 		gbl_alpha = osddev_ext_get_gbl_alpha(info->node);
-		ret = copy_to_user(argp, &gbl_alpha, sizeof(u32));
+		copy_to_user(argp, &gbl_alpha, sizeof(u32));
 		break;
 
 	case FBIOGET_OSD_SCALE_AXIS:
 		osddev_ext_get_scale_axis(info->node, &osd_ext_axis[0], &osd_ext_axis[1], &osd_ext_axis[2], &osd_ext_axis[3]);
-		ret = copy_to_user(argp, &osd_ext_axis, 4 * sizeof(s32));
+		copy_to_user(argp, &osd_ext_axis, 4 * sizeof(s32));
 		break;
 	case FBIOPUT_OSD_SCALE_AXIS:
 		osddev_ext_set_scale_axis(info->node, osd_ext_axis[0], osd_ext_axis[1], osd_ext_axis[2], osd_ext_axis[3]);
 		break;
 	case FBIOGET_OSD_BLOCK_WINDOWS:
 		osddev_ext_get_block_windows(info->node, block_windows);
-		ret = copy_to_user(argp, &block_windows, 8 * sizeof(u32));
+		copy_to_user(argp, &block_windows, 8 * sizeof(u32));
 		break;
 	case FBIOPUT_OSD_BLOCK_WINDOWS:
 		osddev_ext_set_block_windows(info->node, block_windows);
@@ -397,14 +397,17 @@ osd_ext_ioctl(struct fb_info *info, unsigned int cmd,
 		break;
 	case FBIOGET_OSD_BLOCK_MODE:
 		osddev_ext_get_block_mode(info->node, &block_mode);
-		ret = copy_to_user(argp, &block_mode, sizeof(u32));
+		copy_to_user(argp, &block_mode, sizeof(u32));
 		break;
 	case FBIOGET_OSD_FREE_SCALE_AXIS:
 		osddev_ext_get_free_scale_axis(info->node, &osd_ext_axis[0], &osd_ext_axis[1], &osd_ext_axis[2], &osd_ext_axis[3]);
-		ret = copy_to_user(argp, &osd_ext_axis, 4 * sizeof(s32));
+		copy_to_user(argp, &osd_ext_axis, 4 * sizeof(s32));
 		break;
 	case FBIOPUT_OSD_FREE_SCALE_AXIS:
 		osddev_ext_set_free_scale_axis(info->node, osd_ext_axis[0], osd_ext_axis[1], osd_ext_axis[2], osd_ext_axis[3]);
+		break;
+	case	FBIOPUT_OSD_ENFORCE_PROGRESSIVE:
+		osddev_ext_set_enforce_progressive(info->node, arg);
 		break;
 	default:
 		break;
@@ -418,6 +421,7 @@ osd_ext_ioctl(struct fb_info *info, unsigned int cmd,
 static int osd_ext_open(struct fb_info *info, int arg)
 {
 	return 0;
+
 }
 
 static int
@@ -517,9 +521,9 @@ int osd_ext_notify_callback(struct notifier_block *block, unsigned long cmd , vo
 				continue;
 			}
 			set_default_display_axis(&fb_dev->fb_info->var, &fb_dev->osd_ext_ctl, vinfo);
-			console_lock();
+			acquire_console_sem();
 			osddev_ext_update_disp_axis(fb_dev, 1);
-			console_unlock();
+			release_console_sem();
 		}
 		break;
 
@@ -529,9 +533,9 @@ int osd_ext_notify_callback(struct notifier_block *block, unsigned long cmd , vo
 			if (NULL == (fb_dev = gp_fbdev_list[i])) {
 				continue;
 			}
-			console_lock();
+			acquire_console_sem();
 			osd_ext_blank(blank, fb_dev->fb_info);
-			console_unlock();
+			release_console_sem();
 		}
 		break;
 	case   VOUT_EVENT_OSD_DISP_AXIS:
@@ -564,9 +568,9 @@ int osd_ext_notify_callback(struct notifier_block *block, unsigned long cmd , vo
 			amlog_mask_level(LOG_MASK_PARA, LOG_LEVEL_LOW, "new disp axis: startx:%d starty:%d endx:%d endy:%d\r\n"  , \
 			                 fb_dev->osd_ext_ctl.disp_start_x, fb_dev->osd_ext_ctl.disp_start_y, \
 			                 fb_dev->osd_ext_ctl.disp_end_x, fb_dev->osd_ext_ctl.disp_end_y);
-			console_lock();
+			acquire_console_sem();
 			osddev_ext_update_disp_axis(fb_dev, 0);
-			console_unlock();
+			release_console_sem();
 		}
 
 		break;
@@ -856,7 +860,7 @@ static ssize_t store_scale_width(struct device *device, struct device_attribute 
 }
 
 static ssize_t show_scale_width(struct device *device, struct device_attribute *attr,
-                                 char *buf)
+                                const char *buf)
 {
 	struct fb_info *fb_info = dev_get_drvdata(device);
 	unsigned int free_scale_width = 0;
@@ -877,9 +881,8 @@ static ssize_t store_scale_height(struct device *device, struct device_attribute
 	}
 	return count;
 }
-
 static ssize_t show_scale_height(struct device *device, struct device_attribute *attr,
-                                  char *buf)
+                                 const char *buf)
 {
 	struct fb_info *fb_info = dev_get_drvdata(device);
 	unsigned int free_scale_height = 0;
@@ -932,7 +935,7 @@ static ssize_t show_scale(struct device *device, struct device_attribute *attr,
 	return snprintf(buf, PAGE_SIZE, "scale:[0x%x]\n", fbdev->scale);
 }
 
-static ssize_t store_osd_info(struct device *device, struct device_attribute *attr,
+static ssize_t store_osd_ext_info(struct device *device, struct device_attribute *attr,
                                   const char *buf, size_t count)
 {
 	struct fb_info *fb_info = dev_get_drvdata(device);
@@ -950,7 +953,7 @@ static ssize_t store_osd_info(struct device *device, struct device_attribute *at
 		}
 		osddev_ext_get_osd_ext_info(fb_info->node, osd_ext_val, osd_ext_reg, osd_ext_info_flag);
 	} else {
-		amlog_level(LOG_LEVEL_HIGH, "set store_osd_info *buf* is NULL error\n");
+		amlog_level(LOG_LEVEL_HIGH, "set store_osd_ext_info *buf* is NULL error\n");
 	}
 
 	if (osd_ext_info_flag == 0) {
@@ -989,7 +992,7 @@ static ssize_t store_osd_info(struct device *device, struct device_attribute *at
 		            "  [0x1a64] : *0x%x*\n",
 		            osd_ext_reg[1][0], osd_ext_reg[1][1], osd_ext_reg[1][2], osd_ext_reg[1][3], osd_ext_reg[1][4]);
 	} else if (osd_ext_info_flag == 2) {
-		amlog_level(LOG_LEVEL_HIGH, "set store_osd_info osd_ext_info_flag is error\n");
+		amlog_level(LOG_LEVEL_HIGH, "set store_osd_ext_info osd_ext_info_flag is error\n");
 	}
 
 	return count;
@@ -1072,6 +1075,52 @@ static ssize_t store_block_mode(struct device *device, struct device_attribute *
 	return count;
 }
 
+static ssize_t show_enforce_progressive(struct device *device, struct device_attribute *attr,
+                                        char *buf)
+{
+	struct fb_info *fb_info = dev_get_drvdata(device);
+	u32 enforce_progressive;
+
+	osddev_ext_get_enforce_progressive(fb_info->node, &enforce_progressive);
+
+	return snprintf(buf, PAGE_SIZE, "enforce_progressive is %d\n", enforce_progressive);
+}
+
+static ssize_t store_enforce_progressive(struct device *device, struct device_attribute *attr,
+                                         const char *buf, size_t count)
+{
+	struct fb_info *fb_info = dev_get_drvdata(device);
+	u32 enforce_progressive;
+
+	enforce_progressive = simple_strtoul(buf, NULL, 0);
+	printk("enforce_progressive is %d\n", enforce_progressive);
+	osddev_ext_set_enforce_progressive(fb_info->node, enforce_progressive);
+
+	return count;
+}
+
+static ssize_t show_canvas_conf(struct device *device, struct device_attribute *attr,
+                                char *buf)
+{
+	struct fb_info *fb_info = dev_get_drvdata(device);
+	struct myfb_dev *fbdev = (struct myfb_dev *)fb_info->par;
+	return snprintf(buf, PAGE_SIZE, "canvas_conf:[0x%x]\n", fbdev->canvas_conf);
+
+}
+
+static ssize_t store_canvas_conf(struct device *device, struct device_attribute *attr,
+                                 const char *buf, size_t count)
+{
+	struct fb_info *fb_info = dev_get_drvdata(device);
+	struct myfb_dev *fbdev = (struct myfb_dev *)fb_info->par;
+	int err;
+	fbdev->canvas_conf = simple_strtoul(buf, NULL, 0);
+	if ((err = osd_ext_ioctl(fb_info, FBIOPUT_OSD_CANVAS_CONF, fbdev->canvas_conf))) {
+		return err;
+	}
+	return count;
+}
+
 static ssize_t show_clone(struct device *device, struct device_attribute *attr,
 			 char *buf)
 {
@@ -1095,29 +1144,6 @@ static ssize_t store_clone(struct device *device, struct device_attribute *attr,
 	return count;
 }
 
-static ssize_t show_angle(struct device *device, struct device_attribute *attr,
-			 char *buf)
-{
-	struct fb_info *fb_info = dev_get_drvdata(device);
-	u32 angle;
-
-	osddev_ext_get_angle(fb_info->node, &angle);
-
-	return snprintf(buf, PAGE_SIZE, "osd_ext->angle: [0x%x]\n", angle);
-}
-
-static ssize_t store_angle(struct device *device, struct device_attribute *attr,
-			 const char *buf, size_t count)
-{
-	struct fb_info *fb_info = dev_get_drvdata(device);
-	u32 angle;
-
-	angle = simple_strtoul(buf, NULL, 0);
-	osddev_ext_set_angle(fb_info->node, angle);
-
-	return count;
-}
-
 static struct device_attribute osd_ext_attrs[] = {
 	__ATTR(scale, S_IRUGO | S_IWUSR, show_scale, store_scale),
 	__ATTR(order, S_IRUGO | S_IWUSR, show_order, store_order),
@@ -1133,33 +1159,30 @@ static struct device_attribute osd_ext_attrs[] = {
 	__ATTR(block_windows, S_IRUGO | S_IWUSR, show_block_windows, store_block_windows),
 	__ATTR(block_mode, S_IRUGO | S_IWUSR, show_block_mode, store_block_mode),
 	__ATTR(free_scale_axis, S_IRUGO | S_IWUSR, show_free_scale_axis, store_free_scale_axis),
-	__ATTR(osd_info_msg, S_IRUGO | S_IWUSR, NULL, store_osd_info),
+	__ATTR(osd_ext_info_msg, S_IRUGO | S_IWUSR, NULL, store_osd_ext_info),
 	__ATTR(request2XScale, S_IRUGO | S_IWUSR, show_request_2xscale, store__request_2xscale),
 	__ATTR(video_hole, S_IRUGO | S_IWUSR, show_video_hole, store__video_hole),
+	__ATTR(enforce_progressive, S_IRUGO | S_IWUSR, show_enforce_progressive, store_enforce_progressive),
+	__ATTR(canvas_conf, S_IRUGO | S_IWUSR, show_canvas_conf, store_canvas_conf),
 	__ATTR(clone, S_IRUGO|S_IWUSR, show_clone, store_clone),
-	__ATTR(angle, S_IRUGO|S_IWUSR, show_angle, store_angle),
 };
 
 #ifdef CONFIG_PM
 static int osd_ext_suspend(struct platform_device *pdev, pm_message_t state)
 {
 #ifdef CONFIG_HAS_EARLYSUSPEND
-	if (early_suspend_flag)
+	if (early_suspend_flag) {
 		return 0;
+	}
 #endif
 	osddev_ext_suspend();
 	return 0;
 }
 
-static int osd_ext_resume(struct platform_device * dev)
+static int osd_ext_resume(struct platform_device *pdev)
 {
 #ifdef CONFIG_HAS_EARLYSUSPEND
-    if (early_suspend_flag)
-        return 0;
-#endif
-#ifdef CONFIG_SCREEN_ON_EARLY
-	if (early_resume_flag) {
-		early_resume_flag = 0;
+	if (early_suspend_flag) {
 		return 0;
 	}
 #endif
@@ -1188,23 +1211,40 @@ static void osd_ext_late_resume(struct early_suspend *h)
 }
 #endif
 
-#ifdef CONFIG_SCREEN_ON_EARLY
-void osd_ext_resume_early(void)
+#if 0 // def CONFIG_MACH_MESON3_REFF16
+int __init get_resolution(char *str)
 {
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	osddev_ext_resume();
-	early_suspend_flag = 0;
-#endif
-	early_resume_flag = 1;
-	return ;
+	if (strncmp("480", str, 3) == 0) {
+		mydef_var[0].xres = mydef_var[1].xres = 720;
+		mydef_var[0].yres = mydef_var[1].yres = 480;
+		mydef_var[0].xres_virtual = mydef_var[1].xres_virtual = 720;
+		mydef_var[0].yres_virtual = mydef_var[1].yres_virtual = 960;
+	} else if (strncmp("576", str, 3) == 0) {
+		mydef_var[0].xres = mydef_var[1].xres = 720;
+		mydef_var[0].yres = mydef_var[1].yres = 576;
+		mydef_var[0].xres_virtual = mydef_var[1].xres_virtual = 720;
+		mydef_var[0].yres_virtual = mydef_var[1].yres_virtual = 1152;
+	} else if (strncmp("720", str, 3) == 0) {
+		mydef_var[0].xres = mydef_var[1].xres = 1280;
+		mydef_var[0].yres = mydef_var[1].yres = 720;
+		mydef_var[0].xres_virtual = mydef_var[1].xres_virtual = 1280;
+		mydef_var[0].yres_virtual = mydef_var[1].yres_virtual = 1440;
+	} else if (strncmp("1080", str, 4) == 0) {
+		mydef_var[0].xres = mydef_var[1].xres = 1920;
+		mydef_var[0].yres = mydef_var[1].yres = 1080;
+		mydef_var[0].xres_virtual = mydef_var[1].xres_virtual = 1920;
+		mydef_var[0].yres_virtual = mydef_var[1].yres_virtual = 2160;
+	}
+	printk("***osd size: %d, %d, %d, %d...\n", mydef_var[0].xres, mydef_var[0].yres, mydef_var[0].xres_virtual, mydef_var[0].yres_virtual);
+
 }
-EXPORT_SYMBOL(osd_ext_resume_early);
+__setup("androidboot.resolution=", get_resolution) ;
 #endif
 
 static int __init
 osd_ext_probe(struct platform_device *pdev)
 {
-	int r,ret;
+	int r;
 	struct fb_info *fbi = NULL;
 	const vinfo_t *vinfo;
 	struct fb_var_screeninfo *var;
@@ -1218,8 +1258,8 @@ osd_ext_probe(struct platform_device *pdev)
 	vout2_register_client(&osd_ext_notifier_nb);
 
 	if (NULL == init_logo_obj) {
+		//set_current_vmode2(VMODE_720P);
 		set_current_vmode2(VMODE_INIT_NULL);
-		//set_current_vmode2(VMODE_LCD);
 		osddev_ext_init();
 	}
 	vinfo = get_current_vinfo2();
@@ -1280,7 +1320,7 @@ osd_ext_probe(struct platform_device *pdev)
 				mydef_var[index].bits_per_pixel = 32;
 			}
 		} else {
-#if 0 //avoid clearing the mem of uboot osd1 logo
+#if 0//avoid clearing the mem of uboot osd1 logo
 			amlog_level(LOG_LEVEL_HIGH, "---------------clear framebuffer%d memory  \r\n", index + 2);
 			memset((char*)fbdev->fb_mem_vaddr, 0x80, fbdev->fb_len);
 #endif
@@ -1288,7 +1328,6 @@ osd_ext_probe(struct platform_device *pdev)
 
 		_fbdev_set_default(fbdev, index);
 		if (NULL == fbdev->color) {
-			amlog_level(LOG_LEVEL_HIGH, "fbdev->color NULL\n");
 			r = -ENOENT;
 			goto failed1;
 		}
@@ -1319,7 +1358,7 @@ osd_ext_probe(struct platform_device *pdev)
 			osddev_ext_set(fbdev);
 		}
 		for (i = 0; i < ARRAY_SIZE(osd_ext_attrs); i++) {
-			ret=device_create_file(fbi->dev, &osd_ext_attrs[i]);
+			device_create_file(fbi->dev, &osd_ext_attrs[i]);
 		}
 	}
 
@@ -1333,7 +1372,7 @@ osd_ext_probe(struct platform_device *pdev)
 	register_early_suspend(&early_suspend);
 #endif
 
-	amlog_level(LOG_LEVEL_HIGH, "osd-ext probe ok  \r\n");
+	amlog_level(LOG_LEVEL_HIGH, "osd probe ok  \r\n");
 	return 0;
 
 failed2:
@@ -1410,7 +1449,7 @@ exit:
 static struct platform_driver osd_ext_driver = {
 	.probe      = osd_ext_probe,
 	.remove     = osd_ext_remove,
-#ifdef CONFIG_PM
+#ifdef  CONFIG_PM
 	.suspend    = osd_ext_suspend,
 	.resume     = osd_ext_resume,
 #endif

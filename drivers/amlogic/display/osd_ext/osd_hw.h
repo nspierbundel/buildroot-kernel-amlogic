@@ -25,6 +25,8 @@ typedef enum {
 	OSD_CHANGE_ORDER,
 	DISP_GEOMETRY,
 	DISP_SCALE_ENABLE,
+	OSD_ENFORCE_PROGRESSIVE,
+	DISP_CANVAS_CONFIG,
 	HW_REG_INDEX_MAX
 } hw_reg_index;
 
@@ -83,10 +85,13 @@ extern void osd_ext_set_free_scale_axis_hw(u32 index, s32 x0, s32 y0, s32 x1, s3
 extern void osd_ext_get_scale_axis_hw(u32 index, s32 *x0, s32 *y0, s32 *x1, s32 *y1);
 extern void osd_ext_set_scale_axis_hw(u32 index, s32 x0, s32 y0, s32 x1, s32 y1);
 extern void osd_ext_get_osd_ext_info_hw(u32 index, s32(*posdval)[4], u32(*posdreq)[5], s32 info_flag);
+extern void osd_ext_set_canvas_conf_hw(u32 index, u32 canvas_config);
 extern void osd_ext_get_block_windows_hw(u32 index, u32 *windows);
 extern void osd_ext_set_block_windows_hw(u32 index, u32 *windows);
 extern void osd_ext_get_block_mode_hw(u32 index, u32 *mode);
 extern void osd_ext_set_block_mode_hw(u32 index, u32 mode);
+extern void osd_ext_get_enforce_progressive_hw(u32 index, u32 *enforce_progressive);
+extern void osd_ext_set_enforce_progressive_hw(u32 index, u32 enforce_progressive);
 extern void osd_ext_enable_3d_mode_hw(int index, int enable);
 extern void osd_ext_set_2x_scale_hw(u32 index, u16 h_scale_enable, u16 v_scale_enable);
 extern void osd_ext_setpal_hw(unsigned regno, unsigned red, unsigned green, unsigned blue, unsigned transp, int index);
@@ -98,8 +103,6 @@ extern void osd_ext_cursor_hw(s16 x, s16 y, s16 xstart, s16 ystart, u32 osd_ext_
 extern void osd_ext_suspend_hw(void);
 extern void osd_ext_resume_hw(void);
 extern void osd_ext_init_hw(u32  logo_loaded);
-extern void osd_ext_get_angle_hw(u32 index, u32 * angle);
-extern void osd_ext_set_angle_hw(u32 index, u32 angle);
 extern void osd_ext_get_clone_hw(u32 index, u32 *clone);
 extern void osd_ext_set_clone_hw(u32 index, u32 clone);
 #endif

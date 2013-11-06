@@ -27,7 +27,7 @@
 #include "freescale_log.h"
 #include "freescale_pri.h"
 #include "freescale_dev.h"
-#include <mach/mod_gate.h>
+//#include <mach/mod_gate.h>
 #define VF_POOL_SIZE 4
 #ifdef CONFIG_MIX_FREE_SCALE
 #define ASS_POOL_SIZE 2
@@ -35,13 +35,9 @@
 #define ASS_POOL_SIZE 1
 #endif
 
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
-
 //#define DDD
 #define RECEIVER_NAME "freescale"
-#define PROVIDER_NAME "freescale"
+#define PROVIDER_NAME   "freescale"
 
 
 #define THREAD_INTERRUPT 0
@@ -92,11 +88,11 @@ static vfq_t q_ready, q_free;
 static struct semaphore thread_sem;
 static DEFINE_MUTEX(freescale_mutex);
 
-const vframe_receiver_op_t* vf_freescale_reg_provider(void);
+const vframe_receiver_op_t* vf_freescale_reg_provider();
 void vf_freescale_unreg_provider(void);
 void vf_freescale_reset(void);
-static void freescale_vf_put_dec(vframe_t *, void*);
-static vframe_t *freescale_vf_peek_dec(void*);
+static inline void freescale_vf_put_dec(vframe_t *vf);
+static inline vframe_t *freescale_vf_peek_dec(void);
 
 #define to_ppframe(vf)	\
 	container_of(vf, struct ppframe_s, frame)
@@ -121,26 +117,26 @@ static inline u32 index2canvas(u32 index)
 *************************************************/
 static int task_running = 0;
 static int still_picture_notify = 0 ;
-//static int q_free_set = 0 ;
-static vframe_t *freescale_vf_peek(void* op_arg)
+static int q_free_set = 0 ;
+static vframe_t *freescale_vf_peek(void)
 {
     vframe_t* vf;
     vf= 	vfq_peek(&q_ready);
    return vf;
 }
 
-static vframe_t *freescale_vf_get(void* op_arg)
+static vframe_t *freescale_vf_get(void)
 {
     return vfq_pop(&q_ready);
 }
 
-static void freescale_vf_put(vframe_t *vf, void* op_arg)
+static void freescale_vf_put(vframe_t *vf)
 {
     ppframe_t *pp_vf = to_ppframe(vf);
 
     /* the frame is in bypass mode, put the decoder frame */
     if (pp_vf->dec_frame)
-        freescale_vf_put_dec(pp_vf->dec_frame, NULL);
+        freescale_vf_put_dec(pp_vf->dec_frame);
     vfq_push(&q_free, vf);
 }
 
@@ -200,7 +196,7 @@ static int freescale_event_cb(int type, void *data, void *private_data)
     return 0;        
 }
 
-static int freescale_vf_states(vframe_states_t *states, void* op_arg)
+static int freescale_vf_states(vframe_states_t *states)
 {
     unsigned long flags;
     spin_lock_irqsave(&lock, flags);
@@ -248,12 +244,12 @@ static int freescale_receiver_event_fun(int type, void *data, void *private_data
             printk("dec put, avail=%d, free=%d\n", vfq_level(&q_ready),  vfq_level(&q_free));
 #endif
 		//printk("dec put, avail=%d, free=%d\n", vfq_level(&q_ready),  vfq_level(&q_free));
-		if(freescale_vf_peek_dec(NULL)){
+		if(freescale_vf_peek_dec()){
         	    up(&thread_sem);
         	}	
             break;
         case VFRAME_EVENT_PROVIDER_QUREY_STATE:
-            freescale_vf_states(&states, NULL);
+            freescale_vf_states(&states);
             if(states.buf_avail_num > 0){
                 return RECEIVER_ACTIVE ;		
             }else{
@@ -362,7 +358,7 @@ void vf_freescale_init_provider()
 	vf_provider_init(&freescale_vf_prov, PROVIDER_NAME ,&freescale_vf_provider, NULL);
 }
 
-static vframe_t *freescale_vf_peek_dec(void* op_arg)
+static inline vframe_t *freescale_vf_peek_dec(void)
 {
     struct vframe_provider_s *vfp;
     vframe_t *vf;
@@ -375,11 +371,11 @@ static vframe_t *freescale_vf_peek_dec(void* op_arg)
     return vf;	
 }
 
-static vframe_t *freescale_vf_get_dec(void* op_arg)
+static inline vframe_t *freescale_vf_get_dec(void)
 {
     struct vframe_provider_s *vfp;
     vframe_t *vf;
-    //unsigned canvas_addr ;
+    unsigned canvas_addr ;
     vfp = vf_get_provider(RECEIVER_NAME);
     if (!(vfp && vfp->ops && vfp->ops->peek))
         return NULL;
@@ -387,7 +383,7 @@ static vframe_t *freescale_vf_get_dec(void* op_arg)
     return vf;
 }
 
-static void freescale_vf_put_dec(vframe_t *vf, void* op_arg)
+static inline void freescale_vf_put_dec(vframe_t *vf)
 {
 	struct vframe_provider_s *vfp;
 	vfp = vf_get_provider(RECEIVER_NAME);
@@ -457,18 +453,19 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
     ppframe_t *pp_vf;
     canvas_t cs0,cs1,cs2,cd;
     u32 mode = 0;
-    int interlace_mode = vf->type & VIDTYPE_TYPEMASK; 
-    int pic_struct = 0;
 #ifdef CONFIG_MIX_FREE_SCALE
     int rect_x = 0, rect_y = 0, rect_w = 0, rect_h = 0;
     u32 ratio = 100;
     mode = amvideo_get_scaler_para(&rect_x, &rect_y, &rect_w, &rect_h, &ratio);
 #endif
+    int pic_struct = 0;
 
     new_vf = vfq_pop(&q_free);
     
     if (unlikely((!new_vf) || (!vf)))
         return;
+
+    int interlace_mode = vf->type & VIDTYPE_TYPEMASK;
 
     pp_vf = to_ppframe(new_vf);
     pp_vf->angle = 0;
@@ -519,14 +516,14 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
         }
         if((!rect_w)||(!rect_h)){
             //printk("++freescale scale out of range 1.\n");
-            freescale_vf_put_dec(vf, NULL);
+            freescale_vf_put_dec(vf);
             vfq_push(&q_free, new_vf);
             return;
         }
         if(((rect_x+rect_w)<0)||(rect_x>=(int)new_vf->width)
           ||((rect_y+rect_h)<0)||(rect_y>=(int)new_vf->height)){
             //printk("++freescale scale out of range 2.\n");
-            freescale_vf_put_dec(vf, NULL);
+            freescale_vf_put_dec(vf);
             vfq_push(&q_free, new_vf);
             return;
         }
@@ -581,7 +578,7 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
         
         if(ge2d_context_config_ex(context,ge2d_config)<0) {
             printk("++ge2d configing error.\n");
-            freescale_vf_put_dec(vf, NULL);
+            freescale_vf_put_dec(vf);
             vfq_push(&q_free, new_vf);
             return;
         }
@@ -594,7 +591,7 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
         if((dst_w > freescale_device.disp_width)||(dst_h > freescale_device.disp_height)){
             if((dst_w * freescale_device.disp_height)>(dst_h*freescale_device.disp_width)){
                 dst_h = (dst_w * freescale_device.disp_height)/freescale_device.disp_width;
-                dst_w = freescale_device.disp_width;
+                dst_w = freescaleprintk_device.disp_width;                
             }else{
                 dst_w = (dst_h*freescale_device.disp_width)/freescale_device.disp_height;
                 dst_h = freescale_device.disp_height;
@@ -662,7 +659,7 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
 
         if(ge2d_context_config_ex(context,ge2d_config)<0) {
             printk("++ge2d configing error.\n");
-            freescale_vf_put_dec(vf, NULL);
+            freescale_vf_put_dec(vf);
             vfq_push(&q_free, new_vf);
             return;
         }
@@ -810,7 +807,7 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
                 dh = rect_h+rect_y;
             else
                 dh = rect_h;
-        }
+        }printk
         //if(scale_clear_count==3)
         //    printk("--freescale scale rect: src x:%d, y:%d, w:%d, h:%d. dst x:%d, y:%d, w:%d, h:%d.\n", sx, sy, sw, sh,dx,dy,dw,dh);
         stretchblt_noalpha(context,sx,(pic_struct)?(sy/2):sy,sw,(pic_struct)?(sh/2):sh,dx,dy,dw,dh);
@@ -821,7 +818,7 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
     stretchblt_noalpha(context,0,0,vf->width,(pic_struct)?(vf->height/2):vf->height,0,0,new_vf->width,new_vf->height);
 	
 #endif
-    freescale_vf_put_dec(vf, NULL);
+    freescale_vf_put_dec(vf);
 
     vfq_push(&q_ready, new_vf);
 
@@ -836,19 +833,19 @@ static void process_vf_change(vframe_t *vf, ge2d_context_t *context, config_para
     ppframe_t *pp_vf = to_ppframe(vf);
     canvas_t cs0,cs1,cs2,cd;
     int pic_struct = 0;
-    int temp_angle = 0;
-    int interlace_mode = vf->type & VIDTYPE_TYPEMASK;
 
     temp_vf.duration = vf->duration;
     temp_vf.duration_pulldown = vf->duration_pulldown;
     temp_vf.pts = vf->pts;
     temp_vf.type = VIDTYPE_VIU_444 | VIDTYPE_VIU_SINGLE_PLANE | VIDTYPE_VIU_FIELD;
     temp_vf.canvas0Addr = temp_vf.canvas1Addr = ass_index;
+    int temp_angle = 0;
     temp_angle = (freescale_device.videoangle  >= pp_vf->angle )?(freescale_device.videoangle -  pp_vf->angle) :  (freescale_device.videoangle + 4 -  pp_vf->angle)   ;
     
     pp_vf->angle = freescale_device.videoangle ;
     vf_rotate_adjust(vf, &temp_vf, temp_angle);
 
+    int interlace_mode = vf->type & VIDTYPE_TYPEMASK;
     if(interlace_mode == VIDTYPE_INTERLACE_TOP)
         pic_struct = (GE2D_FORMAT_M24_YUV420T & (3<<3));
     else if(interlace_mode == VIDTYPE_INTERLACE_BOTTOM)
@@ -1003,10 +1000,10 @@ static void process_vf_change(vframe_t *vf, ge2d_context_t *context, config_para
     stretchblt_noalpha(context,0,0,temp_vf.width,temp_vf.height,0,0,vf->width,vf->height);
     //vf->duration = 0 ;
     if (pp_vf->dec_frame){
-        freescale_vf_put_dec(pp_vf->dec_frame, NULL);
-        pp_vf->dec_frame = 0;
+        freescale_vf_put_dec(pp_vf->dec_frame);
+        pp_vf->dec_frame = 0 ;
     }
-    vf->ratio_control = 0;
+    vf->ratio_control = 0;    
 }
 
 #ifdef CONFIG_MIX_FREE_SCALE
@@ -1016,9 +1013,6 @@ static int process_vf_adjust(vframe_t *vf, ge2d_context_t *context, config_para_
     int rect_x = 0, rect_y = 0, rect_w = 0, rect_h = 0;
     u32 ratio = 100;
     u32 mode = amvideo_get_scaler_para(&rect_x, &rect_y, &rect_w, &rect_h, &ratio);
-    int sx,sy,sw,sh, dx,dy,dw,dh;
-    unsigned ratio_x = (backup_content_w<<8)/rect_w;
-    unsigned ratio_y = (backup_content_h<<8)/rect_h;
     
     if(!mode){
         //printk("--freescale adjust: scaler mode is disabled.\n");
@@ -1156,6 +1150,10 @@ static int process_vf_adjust(vframe_t *vf, ge2d_context_t *context, config_para_
         return -2;
     }
 
+    int sx,sy,sw,sh, dx,dy,dw,dh;
+    unsigned ratio_x = (backup_content_w<<8)/rect_w;
+    unsigned ratio_y = (backup_content_h<<8)/rect_h;
+
     if(rect_x<0){
         sx = ((0-rect_x)*ratio_x)>>8;
         sx = sx&(0xfffffffe);
@@ -1275,7 +1273,6 @@ static int freescale_task(void *data)
     struct sched_param param = {.sched_priority = MAX_RT_PRIO - 1 };
     ge2d_context_t *context=create_ge2d_work_queue();
     config_para_ex_t ge2d_config;
-    vframe_t *vf = NULL;
     memset(&ge2d_config,0,sizeof(config_para_ex_t));
 
     sched_setscheduler(current, SCHED_FIFO, &param);
@@ -1283,7 +1280,8 @@ static int freescale_task(void *data)
     while (down_interruptible(&thread_sem) == 0) {
         if (kthread_should_stop())
             break;
-     
+
+        vframe_t *vf = NULL;       
 #ifdef CONFIG_MIX_FREE_SCALE
         if(scaler_pos_changed){
             scaler_pos_changed = 0;
@@ -1296,7 +1294,7 @@ static int freescale_task(void *data)
             vf = vfq_peek(&q_ready);
             while(vf){
                 vf = vfq_pop(&q_ready);
-                freescale_vf_put(vf, NULL);
+                freescale_vf_put(vf);
                 vf = vfq_peek(&q_ready);		            		
             }                  		
          	                      
@@ -1328,8 +1326,8 @@ static int freescale_task(void *data)
         }
 
         /* process when we have both input and output space */
-        while (freescale_vf_peek_dec(NULL) && (!vfq_empty(&q_free)) && (!freescale_blocking)) {
-            process_vf_rotate(freescale_vf_get_dec(NULL), context, &ge2d_config);
+        while (freescale_vf_peek_dec() && (!vfq_empty(&q_free)) && (!freescale_blocking)) {
+            process_vf_rotate(freescale_vf_get_dec(), context, &ge2d_config);
         }
         
         if (freescale_blocking) {
@@ -1369,14 +1367,12 @@ static struct notifier_block vout_notifier =
 {
     .notifier_call  = vout_notify_callback,
 };
-int freescale_register(void)
+int freescale_register()
 {    
 	vf_freescale_init_provider();
 	vf_freescale_init_receiver();
 	vf_freescale_reg_receiver();
 	vout_register_client(&vout_notifier);
-	
-	return 0;
 }
 
 
@@ -1443,7 +1439,7 @@ int freescale_buffer_init(void)
 
 static int start_freescale_task(void)
 {
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
+#ifdef CONFIG_ARCH_MESON6
 	switch_mod_gate_by_name("ge2d", 1);
 #endif	
 	freescale_buffer_init();

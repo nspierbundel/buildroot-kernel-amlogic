@@ -94,8 +94,6 @@ struct vpfe_config {
 	/* vpfe clock */
 	struct clk *vpssclk;
 	struct clk *slaveclk;
-	/* Function for Clearing the interrupt */
-	void (*clr_intr)(int vdint);
 };
 
 struct vpfe_device {

@@ -192,6 +192,11 @@ void osddev_ext_get_osd_ext_info(u32 index, s32(*posdval)[4], u32(*posdreg)[5], 
 	osd_ext_get_osd_ext_info_hw(index - 2, posdval, posdreg, info_flag);
 }
 
+void osddev_ext_set_canvas_conf(u32 index, u32 canvas_conf)
+{
+	osd_ext_set_canvas_conf_hw(index - 2, canvas_conf);
+}
+
 void osddev_ext_set_2x_scale(u32 index, u16 h_scale_enable, u16 v_scale_enable)
 {
 	osd_ext_set_2x_scale_hw(index - 2, h_scale_enable, v_scale_enable);
@@ -217,6 +222,16 @@ void osddev_ext_get_block_mode(u32 index, u32 *mode)
 	osd_ext_get_block_mode_hw(index - 2, mode);
 }
 
+void osddev_ext_set_enforce_progressive(u32 index, u32 enforce_progressive)
+{
+	osd_ext_set_enforce_progressive_hw(index - 2, enforce_progressive);
+}
+
+void osddev_ext_get_enforce_progressive(u32 index, u32 *enforce_progressive)
+{
+	osd_ext_get_enforce_progressive_hw(index - 2, enforce_progressive);
+}
+
 void osddev_ext_enable(int enable, int  index)
 {
 	osd_ext_enable_hw(enable, index - 2);
@@ -236,27 +251,27 @@ void osddev_ext_cursor(struct myfb_dev *fbdev, s16 x, s16 y, s16 xstart, s16 yst
 }
 #endif
 
-void osddev_ext_set_colorkey(u32 index, u32 bpp, u32 colorkey)
+void  osddev_ext_set_colorkey(u32 index, u32 bpp, u32 colorkey)
 {
 	osd_ext_set_colorkey_hw(index - 2, bpp, colorkey);
 }
 
-void osddev_ext_srckey_enable(u32  index, u8 enable)
+void  osddev_ext_srckey_enable(u32  index, u8 enable)
 {
 	osd_ext_srckey_enable_hw(index - 2, enable);
 }
 
-void osddev_ext_set_gbl_alpha(u32 index, u32 gbl_alpha)
+void  osddev_ext_set_gbl_alpha(u32 index, u32 gbl_alpha)
 {
 	osd_ext_set_gbl_alpha_hw(index - 2, gbl_alpha);
 }
 
-u32 osddev_ext_get_gbl_alpha(u32  index)
+u32  osddev_ext_get_gbl_alpha(u32  index)
 {
 	return osd_ext_get_gbl_alpha_hw(index - 2);
 }
 
-void osddev_ext_suspend(void)
+void  osddev_ext_suspend(void)
 {
 	osd_ext_suspend_hw();
 }
@@ -264,16 +279,6 @@ void osddev_ext_suspend(void)
 void osddev_ext_resume(void)
 {
 	osd_ext_resume_hw();
-}
-
-void osddev_ext_get_angle(u32 index, u32 *angle)
-{
-	osd_ext_get_angle_hw(index - 2, angle);
-}
-
-void osddev_ext_set_angle(u32 index, u32 angle)
-{
-	osd_ext_set_angle_hw(index - 2, angle);
 }
 
 void osddev_ext_get_clone(u32 index, u32 *clone)

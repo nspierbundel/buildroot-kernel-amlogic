@@ -3,9 +3,9 @@
 #include <mach/am_regs.h>
 #include  <linux/module.h>
 
-#define	AVMem_kmalloc(x)	kmalloc(x,GFP_KERNEL)
-#define	AVMem_calloc(a,b)	kcalloc(a,b,GFP_KERNEL)
-#define	AVMem_free		kfree
+#define 	AVMem_kmalloc(x)   kmalloc(x,GFP_KERNEL)
+#define	AVMem_calloc(a,b)   kcalloc(a,b,GFP_KERNEL)
+#define   AVMem_free		  kfree
 
 
 #define MAX_BITBLT_WORK_CONFIG 4
@@ -109,9 +109,6 @@
 
 #define GE2D_COLOR_MAP_SHIFT        20
 #define GE2D_COLOR_MAP_MASK         (0xf << GE2D_COLOR_MAP_SHIFT)
-/* nv12 &nv21, only works on m6*/
-#define GE2D_COLOR_MAP_NV12		(15 << GE2D_COLOR_MAP_SHIFT)
-#define GE2D_COLOR_MAP_NV21		(14 << GE2D_COLOR_MAP_SHIFT)
 /* 16 bit */
 #define GE2D_COLOR_MAP_YUV422		(0 << GE2D_COLOR_MAP_SHIFT)
 #define GE2D_COLOR_MAP_RGB655		(1 << GE2D_COLOR_MAP_SHIFT)
@@ -194,11 +191,6 @@
 #define GE2D_FMT_M24_RGB         	0x00004 /* 00_00_0_00_1_00 */
 #define GE2D_FMT_M24_YUV420T     	0x20017 /* 00_00_0_10_1_11 */
 #define GE2D_FMT_M24_YUV420B     	0x2001f /* 00_00_0_11_1_11 */
-
-#define GE2D_FMT_M24_YUV420SP		0x20207
-#define GE2D_FMT_M24_YUV420SPT		0x20217 /* 01_00_0_00_1_11 nv12 &nv21, only works on m6. */
-#define GE2D_FMT_M24_YUV420SPB		0x2021f /* 01_00_0_00_1_11 nv12 &nv21, only works on m6. */
-
 #define GE2D_FMT_S16_YUV422T     	0x20110 /* 01_00_0_10_0_00 */
 #define GE2D_FMT_S16_YUV422B     	0x20138 /* 01_00_0_11_0_00 */
 #define GE2D_FMT_S24_YUV444T     	0x20210 /* 10_00_0_10_0_00 */
@@ -212,18 +204,7 @@
 #define GE2D_FORMAT_S8_G            GE2D_FMT_S8_G            
 #define GE2D_FORMAT_S8_B            GE2D_FMT_S8_B            
 #define GE2D_FORMAT_S8_A            GE2D_FMT_S8_A            
-#define GE2D_FORMAT_S8_LUT          GE2D_FMT_S8_LUT
-/* nv12 &nv21, only works on m6. */
-#define GE2D_FORMAT_M24_NV12	    (GE2D_FMT_M24_YUV420SP| GE2D_COLOR_MAP_NV12)
-#define GE2D_FORMAT_M24_NV12T	    (GE2D_FMT_M24_YUV420SPT| GE2D_COLOR_MAP_NV12)
-#define GE2D_FORMAT_M24_NV12B	    (GE2D_FMT_M24_YUV420SPB| GE2D_COLOR_MAP_NV12)
-#define GE2D_FORMAT_M24_NV21	    (GE2D_FMT_M24_YUV420SP| GE2D_COLOR_MAP_NV21)
-#define GE2D_FORMAT_M24_NV21T	    (GE2D_FMT_M24_YUV420SPT| GE2D_COLOR_MAP_NV21)
-#define GE2D_FORMAT_M24_NV21B	    (GE2D_FMT_M24_YUV420SPB| GE2D_COLOR_MAP_NV21)
-
-
-
-#define GE2D_FORMAT_S12_RGB_655         (GE2D_FMT_S16_RGB     | GE2D_COLOR_MAP_RGB655)      
+#define GE2D_FORMAT_S8_LUT          GE2D_FMT_S8_LUT          
 #define GE2D_FORMAT_S16_YUV422      (GE2D_FMT_S16_YUV422  | GE2D_COLOR_MAP_YUV422)
 #define GE2D_FORMAT_S16_RGB_655         (GE2D_FMT_S16_RGB     | GE2D_COLOR_MAP_RGB655)  
 #define GE2D_FORMAT_S24_YUV444      (GE2D_FMT_S24_YUV444  | GE2D_COLOR_MAP_YUV444) 
@@ -317,50 +298,43 @@ typedef struct {
 } ge2d_src1_data_t;
 
 typedef struct {
-	int               clipx_start;
-	int               clipx_end;
-	int               clipy_start;
-	int               clipy_end;
-	unsigned char     clipx_start_ex;
-	unsigned char     clipx_end_ex;
-	unsigned char     clipy_start_ex;
-	unsigned char     clipy_end_ex;
-	unsigned char     pic_struct;
-	unsigned char     fill_mode; //bit1 for outside alpha , bit0 for color data
-	unsigned int      outside_alpha;
-	unsigned char     chfmt_rpt_pix;
-	unsigned char     cvfmt_rpt_pix;
+    int               clipx_start;
+    int               clipx_end;
+    int               clipy_start;
+    int               clipy_end;
+    unsigned char     clipx_start_ex;
+    unsigned char     clipx_end_ex;
+    unsigned char     clipy_start_ex;
+    unsigned char     clipy_end_ex;
+    unsigned char     pic_struct;
+    unsigned char     fill_mode; //bit1 for outside alpha , bit0 for color data
+    unsigned int      outside_alpha;
+    unsigned char     chfmt_rpt_pix;
+    unsigned char     cvfmt_rpt_pix;
 } ge2d_src1_gen_t;
 
 typedef struct {
-	unsigned char     urgent_en;
-	unsigned char     ddr_burst_size;
-	unsigned char     src2_canaddr;
-	unsigned char     src2_format;
+    unsigned char     urgent_en;
+    unsigned char     ddr_burst_size;
+    unsigned char     src2_canaddr;
+    unsigned char     src2_format;
 
 	unsigned char     src2_endian;
 	unsigned char     src2_color_map;
     
-	unsigned char     src2_mode_8b_sel;
-	unsigned int      src2_def_color;
+    unsigned char     src2_mode_8b_sel;
+    unsigned int      src2_def_color;
 
-	unsigned int     dst_canaddr;
-	unsigned char    dst_format;
+    unsigned char     dst_canaddr;
+    unsigned char     dst_format;
 
 	unsigned char     dst_endian;
 	unsigned char     dst_color_map;
    
-	unsigned char     dst_mode_8b_sel;
+    unsigned char     dst_mode_8b_sel;
 
-	unsigned int      src2_format_all;
-	unsigned int      dst_format_all;
-	
-	/* only for m6 */
-	unsigned char	dst2_pixel_byte_width;
-	unsigned char	dst2_color_map;
-	unsigned char	dst2_discard_mode;
-	unsigned char	dst2_enable;
-	
+    unsigned int      src2_format_all;
+    unsigned int      dst_format_all;
 } ge2d_src2_dst_data_t;
 
 
@@ -380,6 +354,7 @@ typedef struct {
     unsigned char     dst_clip_mode;
     unsigned char     dst_pic_struct;
 } ge2d_src2_dst_gen_t;
+
 
 typedef struct {
     //scaler related

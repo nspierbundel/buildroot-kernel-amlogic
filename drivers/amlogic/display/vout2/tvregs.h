@@ -197,116 +197,15 @@ static const  reg_t tvregs_720p_50hz[] = {
     {MREG_END_MARKER,            0      }
 };
 
-#ifndef M3_SETTING
-static const reg_t tvregs_480i[] = {
-    {VENC_VDAC_SETTING,            0xff,  },
-
-    {ENCI_CFILT_CTRL,              0x12,},
-    {ENCI_CFILT_CTRL2,              0x12,},
-    {VENC_DVI_SETTING,             0,     },
-    {ENCI_VIDEO_MODE,              0,     },
-    {ENCI_VIDEO_MODE_ADV,          0,     },
-    {ENCI_SYNC_HSO_BEGIN,          5,     },
-    {ENCI_SYNC_HSO_END,            129,   },
-    {ENCI_SYNC_VSO_EVNLN,          0x0003 },
-    {ENCI_SYNC_VSO_ODDLN,          0x0104 },
-    {ENCI_MACV_MAX_AMP,            0x810b },
-    {VENC_VIDEO_PROG_MODE,         0xf0   },
-    {ENCI_VIDEO_MODE,              0x08   },
-    {ENCI_VIDEO_MODE_ADV,          0x26,  },
-    {ENCI_VIDEO_SCH,               0x20,  },
-    {ENCI_SYNC_MODE,               0x07,  },
-    {ENCI_YC_DELAY,                0x353, },
-    {ENCI_VFIFO2VD_PIXEL_START,    0xf3,  },
-    {ENCI_VFIFO2VD_PIXEL_END,      0x0693,},
-    {ENCI_VFIFO2VD_LINE_TOP_START, 0x12,  },
-    {ENCI_VFIFO2VD_LINE_TOP_END,   0x102, },
-    {ENCI_VFIFO2VD_LINE_BOT_START, 0x13,  },
-    {ENCI_VFIFO2VD_LINE_BOT_END,   0x103, },
-    {VENC_SYNC_ROUTE,              0,     },
-    {ENCI_DBG_PX_RST,              0,     },
-    {VENC_INTCTRL,                 0x2,   },
-    {ENCI_VFIFO2VD_CTL,            0x4e01,},
-#if defined(CONFIG_MESON_POWER_PROFILE_LOW)
-    {VENC_VDAC_SETTING,            0x07,   },
-#else
-    {VENC_VDAC_SETTING,            0,     },
-#endif
-    {VENC_UPSAMPLE_CTRL0,          0x0061,},
-    {VENC_UPSAMPLE_CTRL1,          0x4061,},
-    {VENC_UPSAMPLE_CTRL2,          0x5061,},
-    {VENC_VDAC_DACSEL0,            0x0000,},
-    {VENC_VDAC_DACSEL1,            0x0000,},
-    {VENC_VDAC_DACSEL2,            0x0000,},
-    {VENC_VDAC_DACSEL3,            0x0000,},
-    {VENC_VDAC_DACSEL4,            0x0000,},
-    {VENC_VDAC_DACSEL5,            0x0000,},
-    {VENC_VDAC_FIFO_CTRL,          0x2000,},
-    {ENCI_DACSEL_0,                0x6405 },
-    {ENCI_DACSEL_1,                0x87   },
-    {ENCI_VIDEO_EN,                1,     },
-    {MREG_END_MARKER,              0      }
-};
-
-static const reg_t tvregs_480cvbs[] = {
-     {VENC_VDAC_SETTING,            0xff,  },
-    {ENCI_CFILT_CTRL,              0x12,},
-    {ENCI_CFILT_CTRL2,              0x12,},
-    {VENC_DVI_SETTING,             0,     },
-    {ENCI_VIDEO_MODE,              0,     },
-    {ENCI_VIDEO_MODE_ADV,          0,     },
-    {ENCI_SYNC_HSO_BEGIN,          5,     },
-    {ENCI_SYNC_HSO_END,            129,   },
-    {ENCI_SYNC_VSO_EVNLN,          0x0003 },
-    {ENCI_SYNC_VSO_ODDLN,          0x0104 },
-    {ENCI_MACV_MAX_AMP,            0x810b },
-    {VENC_VIDEO_PROG_MODE,         0xf0   },
-    {ENCI_VIDEO_MODE,              0x08   },
-    {ENCI_VIDEO_MODE_ADV,          0x26,  },
-    {ENCI_VIDEO_SCH,               0x20,  },
-    {ENCI_SYNC_MODE,               0x07,  },
-    {ENCI_YC_DELAY,                0x353, },
-    {ENCI_VFIFO2VD_PIXEL_START,    0xf3,  },
-    {ENCI_VFIFO2VD_PIXEL_END,      0x0693,},
-    {ENCI_VFIFO2VD_LINE_TOP_START, 0x12,  },
-    {ENCI_VFIFO2VD_LINE_TOP_END,   0x102, },
-    {ENCI_VFIFO2VD_LINE_BOT_START, 0x13,  },
-    {ENCI_VFIFO2VD_LINE_BOT_END,   0x103, },
-    {VENC_SYNC_ROUTE,              0,     },
-    {ENCI_DBG_PX_RST,              0,     },
-    {VENC_INTCTRL,                 0x2,   },
-    {ENCI_VFIFO2VD_CTL,            0x4e01,},
-#if defined(CONFIG_MESON_POWER_PROFILE_LOW)
-    {VENC_VDAC_SETTING,            0x07,  },
-#else
-    {VENC_VDAC_SETTING,            0,     },
-#endif
-    {VENC_UPSAMPLE_CTRL0,          0x0061,},
-    {VENC_UPSAMPLE_CTRL1,          0x4061,},
-    {VENC_UPSAMPLE_CTRL2,          0x5061,},
-    {VENC_VDAC_DACSEL0,            0x0000,},
-    {VENC_VDAC_DACSEL1,            0x0000,},
-    {VENC_VDAC_DACSEL2,            0x0000,},
-    {VENC_VDAC_DACSEL3,            0x0000,},
-    {VENC_VDAC_DACSEL4,            0x0000,},
-    {VENC_VDAC_DACSEL5,            0x0000,},
-    {VENC_VDAC_FIFO_CTRL,          0x2000,},
-    {ENCI_DACSEL_0,                0x1111 },
-    {ENCI_DACSEL_1,                0x11   },
-    {ENCI_VIDEO_EN,                1,     },
-    {MREG_END_MARKER,              0      }
-};
-
-#else
 static const reg_t tvregs_480i[] = {
     {VENC_VDAC_SETTING,          0xff,  },
 #ifndef CONFIG_AM_TV_OUTPUT2
     {ENCP_VIDEO_EN,              0,     },
-#endif
+#endif    
     {ENCI_VIDEO_EN,              0,     },
 #ifndef CONFIG_AM_TV_OUTPUT2
     {HHI_VID_CLK_DIV,            4,     },
-#endif
+#endif    
     //{HHI_VID_CLK_CNTL,        	 0x05a1,},
     {ENCI_CFILT_CTRL,              0x12,},
     {ENCI_CFILT_CTRL2,             0x12,},
@@ -344,18 +243,14 @@ static const reg_t tvregs_480i[] = {
     {VENC_VDAC_DACSEL3,            0x0000,},
     {VENC_VDAC_DACSEL4,            0x0000,},
     {VENC_VDAC_DACSEL5,            0x0000,},
+//    {VPU_VIU_VENC_MUX_CTRL,        0x0005,},
     {VENC_VDAC_FIFO_CTRL,          0x2000,},
-    {ENCI_DACSEL_0,                0x6405 /*0x1540*/ },
-    {ENCI_DACSEL_1,                0x87 /*0x11*/   },
+    {ENCI_DACSEL_0,                0x1540 },
+    {ENCI_DACSEL_1,                0x11   },
 #ifndef CONFIG_AM_TV_OUTPUT2
     {ENCP_VIDEO_EN,              0,     },
-#endif
+#endif    
     {ENCI_VIDEO_EN,              1,     },
-    {VENC_VDAC_DAC3_GAINCTRL,	 0x15	},
-    {ENCI_VIDEO_BRIGHT,		 	 0x2	},
-    {ENCI_VIDEO_SAT,		 	 0xfe	},
-    {VENC_VDAC_DAC3_FILT_CTRL0,	 0x1	},
-    {VENC_VDAC_DAC3_FILT_CTRL1,	 0xf850	},
     {MREG_END_MARKER,            0      }
 };
 
@@ -363,11 +258,11 @@ static const reg_t tvregs_480cvbs[] = {
     {VENC_VDAC_SETTING,          0xff,  },
 #ifndef CONFIG_AM_TV_OUTPUT2
     {ENCP_VIDEO_EN,              0,     },
-#endif
+#endif    
     {ENCI_VIDEO_EN,              0,     },
 #ifndef CONFIG_AM_TV_OUTPUT2
     {HHI_VID_CLK_DIV,            4,     },
-#endif
+#endif    
     //{HHI_VID_CLK_CNTL,        	 0x05a1,},
     {ENCI_CFILT_CTRL,            0x0810,},
     {VENC_DVI_SETTING,           0,     },
@@ -384,7 +279,7 @@ static const reg_t tvregs_480cvbs[] = {
     {ENCI_VIDEO_SCH,             0x20,  },
     {ENCI_SYNC_MODE,             0x07,  },
     {ENCI_MACV_N0,               0,     },
-    {ENCI_YC_DELAY,                0x345, },
+    {ENCI_YC_DELAY,                0x371, },
     {ENCI_VFIFO2VD_PIXEL_START,    0xf3,  },
     {ENCI_VFIFO2VD_PIXEL_END,      0x0693,},
     {ENCI_VFIFO2VD_LINE_TOP_START, 0x12,  },
@@ -399,7 +294,7 @@ static const reg_t tvregs_480cvbs[] = {
     {VENC_UPSAMPLE_CTRL0,          0x0000,},
     {VENC_UPSAMPLE_CTRL1,          0x0000,},
     {VENC_UPSAMPLE_CTRL2,          0x0000,},
-#ifdef CONFIG_AM_TV_OUTPUT2
+#ifndef CONFIG_AM_TV_OUTPUT2
     {VENC_VDAC_DACSEL0,            0x0000,},
     {VENC_VDAC_DACSEL1,            0x0000,},
     {VENC_VDAC_DACSEL2,            0x0000,},
@@ -408,9 +303,9 @@ static const reg_t tvregs_480cvbs[] = {
     {VENC_VDAC_DACSEL5,            0x0000,},
 //    {VPU_VIU_VENC_MUX_CTRL,        0x0005,},
     {VENC_VDAC_FIFO_CTRL,          0x2000,},
-    {ENCI_DACSEL_0,                0x1111 /*0x1540*/ },
+    {ENCI_DACSEL_0,                0x1540 },
     {ENCI_DACSEL_1,                0x11   },
-    //{ENCP_VIDEO_EN,              0,     },
+    {ENCP_VIDEO_EN,              0,     },
 #else
     {VENC_VDAC_DACSEL0,               0x0001,    },
     {VENC_VDAC_DACSEL1,               0x0001,    },
@@ -419,16 +314,10 @@ static const reg_t tvregs_480cvbs[] = {
     {VENC_VDAC_FIFO_CTRL,             0x3000,    },
     {ENCI_DACSEL_0,                0x1540 },
     {ENCI_DACSEL_1,                   0x11       },
-#endif
+#endif    
     {ENCI_VIDEO_EN,              1,     },
-    {VENC_VDAC_DAC3_GAINCTRL,	 0x15	},
-    {ENCI_VIDEO_BRIGHT,		 	 0x2	},
-    {ENCI_VIDEO_SAT,		 	 0xfe	},
-    {VENC_VDAC_DAC3_FILT_CTRL0,	 0x1	},
-    {VENC_VDAC_DAC3_FILT_CTRL1,	 0xf850	},
     {MREG_END_MARKER,            0      }
 };
-#endif
 
 static const reg_t tvregs_480p[] = {
     {VENC_VDAC_SETTING,          0xff,  },
@@ -500,108 +389,6 @@ static const reg_t tvregs_480p[] = {
     {MREG_END_MARKER,            0      }
 };
 
-#ifndef M3_SETTING
-static const reg_t tvregs_576i[] = {
-    {VENC_VDAC_SETTING,               0xff,      },
-
-    {ENCI_CFILT_CTRL,                 0x12,    },
-    {ENCI_CFILT_CTRL2,                 0x12,    },
-    {VENC_DVI_SETTING,                0,         },
-    {ENCI_VIDEO_MODE,                 0,         },
-    {ENCI_VIDEO_MODE_ADV,             0,         },
-    {ENCI_SYNC_HSO_BEGIN,             3,         },
-    {ENCI_SYNC_HSO_END,               129,       },
-    {ENCI_SYNC_VSO_EVNLN,             0x0003     },
-    {ENCI_SYNC_VSO_ODDLN,             0x0104     },
-    {ENCI_MACV_MAX_AMP,               0x8107     },
-    {VENC_VIDEO_PROG_MODE,            0xff       },
-    {ENCI_VIDEO_MODE,                 0x13       },
-    {ENCI_VIDEO_MODE_ADV,             0x26,      },
-    {ENCI_VIDEO_SCH,                  0x28,      },
-    {ENCI_SYNC_MODE,                  0x07,      },
-    {ENCI_YC_DELAY,                   0x353,     },
-    {ENCI_VFIFO2VD_PIXEL_START,       0x010b     },
-    {ENCI_VFIFO2VD_PIXEL_END,         0x06ab     },
-    {ENCI_VFIFO2VD_LINE_TOP_START,    0x0016     },
-    {ENCI_VFIFO2VD_LINE_TOP_END,      0x0136     },
-    {ENCI_VFIFO2VD_LINE_BOT_START,    0x0017     },
-    {ENCI_VFIFO2VD_LINE_BOT_END,      0x0137     },
-    {VENC_SYNC_ROUTE,                 0,         },
-    {ENCI_DBG_PX_RST,                 0,         },
-    {VENC_INTCTRL,                    0x2,       },
-    {ENCI_VFIFO2VD_CTL,               0x4e01,    },
-#if defined(CONFIG_MESON_POWER_PROFILE_LOW)
-    {VENC_VDAC_SETTING,               0x07,      },
-#else
-    {VENC_VDAC_SETTING,               0,         },
-#endif
-    {VENC_UPSAMPLE_CTRL0,             0x0061,    },
-    {VENC_UPSAMPLE_CTRL1,             0x4061,    },
-    {VENC_UPSAMPLE_CTRL2,             0x5061,    },
-    {VENC_VDAC_DACSEL0,               0x0000,    },
-    {VENC_VDAC_DACSEL1,               0x0000,    },
-    {VENC_VDAC_DACSEL2,               0x0000,    },
-    {VENC_VDAC_DACSEL3,               0x0000,    },
-    {VENC_VDAC_DACSEL4,               0x0000,    },
-    {VENC_VDAC_DACSEL5,               0x0000,    },
-    {VENC_VDAC_FIFO_CTRL,             0x2000,    },
-    {ENCI_DACSEL_0,                   0x6405     },
-    {ENCI_DACSEL_1,                   0x87       },
-    {ENCI_VIDEO_EN,                   1,         },
-    {MREG_END_MARKER,                 0          }
-};
-
-static const reg_t tvregs_576cvbs[] = {
-{VENC_VDAC_SETTING,               0xff,      },
-
-    {ENCI_CFILT_CTRL,                 0x12,    },
-    {ENCI_CFILT_CTRL2,                 0x12,    },
-    {VENC_DVI_SETTING,                0,         },
-    {ENCI_VIDEO_MODE,                 0,         },
-    {ENCI_VIDEO_MODE_ADV,             0,         },
-    {ENCI_SYNC_HSO_BEGIN,             3,         },
-    {ENCI_SYNC_HSO_END,               129,       },
-    {ENCI_SYNC_VSO_EVNLN,             0x0003     },
-    {ENCI_SYNC_VSO_ODDLN,             0x0104     },
-    {ENCI_MACV_MAX_AMP,               0x8107     },
-    {VENC_VIDEO_PROG_MODE,            0xff       },
-    {ENCI_VIDEO_MODE,                 0x13       },
-    {ENCI_VIDEO_MODE_ADV,             0x26,      },
-    {ENCI_VIDEO_SCH,                  0x28,      },
-    {ENCI_SYNC_MODE,                  0x07,      },
-    {ENCI_YC_DELAY,                   0x353,     },
-    {ENCI_VFIFO2VD_PIXEL_START,       0x010b     },
-    {ENCI_VFIFO2VD_PIXEL_END,         0x06ab     },
-    {ENCI_VFIFO2VD_LINE_TOP_START,    0x0016     },
-    {ENCI_VFIFO2VD_LINE_TOP_END,      0x0136     },
-    {ENCI_VFIFO2VD_LINE_BOT_START,    0x0017     },
-    {ENCI_VFIFO2VD_LINE_BOT_END,      0x0137     },
-    {VENC_SYNC_ROUTE,                 0,         },
-    {ENCI_DBG_PX_RST,                 0,         },
-    {VENC_INTCTRL,                    0x2,       },
-    {ENCI_VFIFO2VD_CTL,               0x4e01,    },
-#if defined(CONFIG_MESON_POWER_PROFILE_LOW)
-    {VENC_VDAC_SETTING,               0x07,      },
-#else
-    {VENC_VDAC_SETTING,               0,         },
-#endif
-    {VENC_UPSAMPLE_CTRL0,             0x0061,    },
-    {VENC_UPSAMPLE_CTRL1,             0x4061,    },
-    {VENC_UPSAMPLE_CTRL2,             0x5061,    },
-    {VENC_VDAC_DACSEL0,               0x0000,    },
-    {VENC_VDAC_DACSEL1,               0x0000,    },
-    {VENC_VDAC_DACSEL2,               0x0000,    },
-    {VENC_VDAC_DACSEL3,               0x0000,    },
-    {VENC_VDAC_DACSEL4,               0x0000,    },
-    {VENC_VDAC_DACSEL5,               0x0000,    },
-    {VENC_VDAC_FIFO_CTRL,             0x2000,    },
-    {ENCI_DACSEL_0,                   0x1111     },
-    {ENCI_DACSEL_1,                   0x11       },
-    {ENCI_VIDEO_EN,                   1,         },
-    {MREG_END_MARKER,                 0          }
-};
-
-#else
 static const reg_t tvregs_576i[] = {
     {VENC_VDAC_SETTING,          0xff,  },
 #ifndef CONFIG_AM_TV_OUTPUT2
@@ -628,7 +415,7 @@ static const reg_t tvregs_576i[] = {
     {ENCI_VIDEO_MODE_ADV,        0x26,  },
     {ENCI_VIDEO_SCH,             0x28,  },
     {ENCI_SYNC_MODE,             0x07,  },
-    {ENCI_YC_DELAY,              0x333, },
+    {ENCI_YC_DELAY,              0x353, },
     {ENCI_VFIFO2VD_PIXEL_START,       0x010b     },
     {ENCI_VFIFO2VD_PIXEL_END,         0x06ab     },
     {ENCI_VFIFO2VD_LINE_TOP_START,    0x0016     },
@@ -651,20 +438,14 @@ static const reg_t tvregs_576i[] = {
     {VENC_VDAC_DACSEL5,               0x0000,    },
 //    {VPU_VIU_VENC_MUX_CTRL,           0x0005,    },
     {VENC_VDAC_FIFO_CTRL,             0x2000,    },
-    {ENCI_DACSEL_0,                0x6405 /*0x1540*/ },
-    {ENCI_DACSEL_1,                   0x87 /*0x11*/  },
+    {ENCI_DACSEL_0,                0x1540 },
+    {ENCI_DACSEL_1,                   0x11       },
 #ifndef CONFIG_AM_TV_OUTPUT2
     {ENCP_VIDEO_EN,              0,     },
 #endif    
     {ENCI_VIDEO_EN,              1,     },
-    {VENC_VDAC_DAC3_GAINCTRL,	 0x15	},
-    {ENCI_VIDEO_SAT,		 0xa	},
-    {VENC_VDAC_DAC3_FILT_CTRL0,	 0x1	},
-    {VENC_VDAC_DAC3_FILT_CTRL1,	 0xfe44	},
-    {ENCI_SYNC_ADJ,		 0x8400 },
     {MREG_END_MARKER,            0      }
 };
-
 
 static const reg_t tvregs_576cvbs[] = {
     {VENC_VDAC_SETTING,          0xff,  },
@@ -692,7 +473,7 @@ static const reg_t tvregs_576cvbs[] = {
     {ENCI_VIDEO_SCH,             0x28,  },
     {ENCI_SYNC_MODE,             0x07,  },
     {ENCI_MACV_N0,               0,     },
-    {ENCI_YC_DELAY,              0x333, },
+    {ENCI_YC_DELAY,              0x371, },
     {ENCI_VFIFO2VD_PIXEL_START,       0x010b     },
     {ENCI_VFIFO2VD_PIXEL_END,         0x06ab     },
     {ENCI_VFIFO2VD_LINE_TOP_START,    0x0016     },
@@ -707,7 +488,7 @@ static const reg_t tvregs_576cvbs[] = {
     {VENC_UPSAMPLE_CTRL0,          0x0000,},
     {VENC_UPSAMPLE_CTRL1,          0x0000,},
     {VENC_UPSAMPLE_CTRL2,          0x0000,},
-#ifdef CONFIG_AM_TV_OUTPUT2
+#ifndef CONFIG_AM_TV_OUTPUT2
     {VENC_VDAC_DACSEL0,               0x0000,    },
     {VENC_VDAC_DACSEL1,               0x0000,    },
     {VENC_VDAC_DACSEL2,               0x0000,    },
@@ -716,9 +497,9 @@ static const reg_t tvregs_576cvbs[] = {
     {VENC_VDAC_DACSEL5,               0x0000,    },
 //    {VPU_VIU_VENC_MUX_CTRL,           0x0005,    },
     {VENC_VDAC_FIFO_CTRL,             0x2000,    },
-    {ENCI_DACSEL_0,                0x1111 /*0x1540*/ },
+    {ENCI_DACSEL_0,                0x1540 },
     {ENCI_DACSEL_1,                   0x11       },
-    //{ENCP_VIDEO_EN,              0,     },
+    {ENCP_VIDEO_EN,              0,     },
 #else
     {VENC_VDAC_DACSEL0,               0x0001,    },
     {VENC_VDAC_DACSEL1,               0x0001,    },
@@ -729,14 +510,8 @@ static const reg_t tvregs_576cvbs[] = {
     {ENCI_DACSEL_1,                   0x11       },
 #endif    
     {ENCI_VIDEO_EN,              1,     },
-    {VENC_VDAC_DAC3_GAINCTRL,	 0x15	},
-    {ENCI_VIDEO_SAT,		 0xa	},
-    {VENC_VDAC_DAC3_FILT_CTRL0,	 0x1	},
-    {VENC_VDAC_DAC3_FILT_CTRL1,	 0xfe44	},
-	{ENCI_SYNC_ADJ,		 0x8400 },
     {MREG_END_MARKER,            0      }
 };
-#endif
 
 static const reg_t tvregs_576p[] = {
     {VENC_VDAC_SETTING,          0xff,  },
@@ -1045,7 +820,7 @@ static inline void setreg(const reg_t *r)
     WRITE_MPEG_REG(r->reg, r->val);
     
 // For debug only. 
-#if 1 
+#if 0
     printk("[0x%x] = 0x%x\n", r->reg, r->val);
 #endif
 }

@@ -20,8 +20,10 @@ typedef enum {
 	FLASHLIGHT_ON,
 	FLASHLIGHT_OFF,
 	FLASHLIGHT_TORCH,
-	FLASHLIGHT_RED_EYE,
 }aml_plat_flashlight_status_t;
+
+extern int set_flashlight(bool);
+extern aml_plat_flashlight_status_t get_flashlightflag(void);
 
 #endif
 

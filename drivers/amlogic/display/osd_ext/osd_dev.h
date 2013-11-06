@@ -54,6 +54,7 @@ typedef struct myfb_dev {
 	u32 preblend_enable;
 	u32 enable_key_flag;
 	u32 color_key;
+	u32 canvas_conf;
 } myfb_dev_t;
 typedef struct list_head list_head_t;
 
@@ -87,9 +88,12 @@ extern void osddev_ext_get_block_windows(u32 index, u32 *windows);
 extern void osddev_ext_set_block_windows(u32 index, u32 *windows);
 extern void osddev_ext_get_block_mode(u32 index, u32 *mode);
 extern void osddev_ext_set_block_mode(u32 index, u32 mode);
+extern void osddev_ext_get_enforce_progressive(u32 index, u32 *enforce_progressive);
+extern void osddev_ext_set_enforce_progressive(u32 index, u32 enforce_progressive);
 extern int osddev_ext_select_mode(struct myfb_dev *fbdev);
 extern void osddev_ext_enable_3d_mode(u32 index , u32 enable);
 extern void osddev_ext_set_2x_scale(u32 index, u16 h_scale_enable, u16 v_scale_enable);
+extern void osddev_ext_set_canvas_conf(u32 index, u32 canvas_conf);
 extern void osddev_ext_set(struct myfb_dev *fbdev);
 extern void osddev_ext_update_disp_axis(struct myfb_dev *fbdev, int  mode_change) ;
 extern int osddev_ext_setcolreg(unsigned regno, u16 red, u16 green, u16 blue,
@@ -109,8 +113,6 @@ extern void osddev_ext_set_gbl_alpha(u32 index, u32 gbl_alpha) ;
 extern u32 osddev_ext_get_gbl_alpha(u32 index);
 extern void osddev_ext_suspend(void);
 extern void osddev_ext_resume(void);
-extern void osddev_ext_get_angle(u32 index, u32 *angle);
-extern void osddev_ext_set_angle(u32 index, u32 angle);
 extern void osddev_ext_get_clone(u32 index, u32 *clone);
 extern void osddev_ext_set_clone(u32 index, u32 clone);
 #endif /* OSDFBDEV_H */

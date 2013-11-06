@@ -69,7 +69,7 @@ static  int  bmp_decode(logo_object_t *plogo)
 	for (i=0;i<height ;i++)
 	{
 		memcpy(out,bmp_data,line_length);
-		out+=width*bpp;
+		out+=plogo->dev->vinfo->width*bpp;
 		bmp_data-=line_length;
 		
 	}

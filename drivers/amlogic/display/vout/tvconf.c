@@ -47,12 +47,8 @@
 #include <linux/amlog.h>
 #include <mach/power_gate.h>
 
-#ifndef CONFIG_ARCH_MESON6
-#include <plat/io.h>
-#endif
 
-#define PIN_MUX_REG_0	  0x202c
-#define P_PIN_MUX_REG_0  CBUS_REG_ADDR(PIN_MUX_REG_0)
+
 static    disp_module_info_t    *info;
 
 SET_TV_CLASS_ATTR(vdac_setting,parse_vdac_setting)
@@ -72,48 +68,48 @@ SET_TV_CLASS_ATTR(vdac_setting,parse_vdac_setting)
 static const tvmode_t vmode_tvmode_tab[] =
 {
 	TVMODE_480I, TVMODE_480CVBS,TVMODE_480P, TVMODE_576I,TVMODE_576CVBS, TVMODE_576P, TVMODE_720P, TVMODE_1080I, TVMODE_1080P,
-    TVMODE_720P_50HZ, TVMODE_1080I_50HZ, TVMODE_1080P_50HZ,TVMODE_1080P_24HZ,TVMODE_VGA,TVMODE_SVGA,TVMODE_XGA,TVMODE_SXGA
+    TVMODE_720P_50HZ, TVMODE_1080I_50HZ, TVMODE_1080P_50HZ
 };
 
 
 static const vinfo_t tv_info[] = 
 {
     { /* VMODE_480I */
-		.name              = "480i",
-		.mode              = VMODE_480I,
+        .name              = "480i",
+	.mode              = VMODE_480I,
         .width             = 720,
         .height            = 480,
         .field_height      = 240,
         .aspect_ratio_num  = 4,
         .aspect_ratio_den  = 3,
-        .sync_duration_num = 60,
-        .sync_duration_den = 1,
+        .sync_duration_num = 5994,
+        .sync_duration_den = 100,
     },
      { /* VMODE_480CVBS*/
-		.name              = "480cvbs",
-		.mode              = VMODE_480CVBS,
+        .name              = "480cvbs",
+        .mode              = VMODE_480CVBS,
         .width             = 720,
         .height            = 480,
         .field_height      = 240,
         .aspect_ratio_num  = 4,
         .aspect_ratio_den  = 3,
-        .sync_duration_num = 60,
-        .sync_duration_den = 1,
+        .sync_duration_num = 5994,
+        .sync_duration_den = 100,
     },
     { /* VMODE_480P */
-		.name              = "480p",
-		.mode              = VMODE_480P,
+        .name              = "480p",
+        .mode              = VMODE_480P,
         .width             = 720,
         .height            = 480,
         .field_height      = 480,
         .aspect_ratio_num  = 4,
         .aspect_ratio_den  = 3,
-        .sync_duration_num = 60,
-        .sync_duration_den = 1,
+        .sync_duration_num = 5994,
+        .sync_duration_den = 100,
     },
     { /* VMODE_576I */
-		.name              = "576i",
-		.mode              = VMODE_576I,
+        .name              = "576i",
+        .mode              = VMODE_576I,
         .width             = 720,
         .height            = 576,
         .field_height      = 288,
@@ -123,8 +119,8 @@ static const vinfo_t tv_info[] =
         .sync_duration_den = 1,
     },
     { /* VMODE_576I */
-		.name              = "576cvbs",
-		.mode              = VMODE_576CVBS,
+        .name              = "576cvbs",
+        .mode              = VMODE_576CVBS,
         .width             = 720,
         .height            = 576,
         .field_height      = 288,
@@ -134,8 +130,8 @@ static const vinfo_t tv_info[] =
         .sync_duration_den = 1,
     },
     { /* VMODE_576P */
-		.name              = "576p",
-		.mode              = VMODE_576P,
+        .name              = "576p",
+        .mode              = VMODE_576P,
         .width             = 720,
         .height            = 576,
         .field_height      = 576,
@@ -145,8 +141,8 @@ static const vinfo_t tv_info[] =
         .sync_duration_den = 1,
     },
     { /* VMODE_720P */
-		.name              = "720p",
-		.mode              = VMODE_720P,
+        .name              = "720p",
+        .mode              = VMODE_720P,
         .width             = 1280,
         .height            = 720,
         .field_height      = 720,
@@ -156,8 +152,8 @@ static const vinfo_t tv_info[] =
         .sync_duration_den = 1,
     },
     { /* VMODE_1080I */
-		.name              = "1080i",
-		.mode              = VMODE_1080I,
+        .name              = "1080i",
+        .mode              = VMODE_1080I,
         .width             = 1920,
         .height            = 1080,
         .field_height      = 540,
@@ -167,8 +163,8 @@ static const vinfo_t tv_info[] =
         .sync_duration_den = 1,
     },
     { /* VMODE_1080P */
-		.name              = "1080p",
-		.mode              = VMODE_1080P,
+        .name              = "1080p",
+        .mode              = VMODE_1080P,
         .width             = 1920,
         .height            = 1080,
         .field_height      = 1080,
@@ -178,8 +174,8 @@ static const vinfo_t tv_info[] =
         .sync_duration_den = 1,
     },
     { /* VMODE_720P_50hz */
-		.name              = "720p50hz",
-		.mode              = VMODE_720P_50HZ,
+        .name              = "720p50hz",
+        .mode              = VMODE_720P_50HZ,
         .width             = 1280,
         .height            = 720,
         .field_height      = 720,
@@ -189,8 +185,8 @@ static const vinfo_t tv_info[] =
         .sync_duration_den = 1,
     },
     { /* VMODE_1080I_50HZ */
-		.name              = "1080i50hz",
-		.mode              = VMODE_1080I_50HZ,
+        .name              = "1080i50hz",
+        .mode              = VMODE_1080I_50HZ,
         .width             = 1920,
         .height            = 1080,
         .field_height      = 540,
@@ -200,8 +196,8 @@ static const vinfo_t tv_info[] =
         .sync_duration_den = 1,
     },
     { /* VMODE_1080P_50HZ */
-		.name              = "1080p50hz",
-		.mode              = VMODE_1080P_50HZ,
+        .name              = "1080p50hz",
+        .mode              = VMODE_1080P_50HZ,
         .width             = 1920,
         .height            = 1080,
         .field_height      = 1080,
@@ -210,68 +206,14 @@ static const vinfo_t tv_info[] =
         .sync_duration_num = 50,
         .sync_duration_den = 1,
     },
-    { /* VMODE_1080P_24HZ */
-		.name              = "1080p24hz",
-		.mode              = VMODE_1080P_24HZ,
-        .width             = 1920,
-        .height            = 1080,
-        .field_height      = 1080,
-        .aspect_ratio_num  = 16,
-        .aspect_ratio_den  = 9,
-        .sync_duration_num = 24,
-        .sync_duration_den = 1,
-    },
-    { /* VMODE_vga */
-		.name              = "vga",
-		.mode              = VMODE_VGA,
-        .width             = 640,
-        .height            = 480,
-        .field_height      = 240,
-        .aspect_ratio_num  = 4,
-        .aspect_ratio_den  = 3,
-        .sync_duration_num = 60,
-        .sync_duration_den = 1,
-    }, 
-    { /* VMODE_SVGA */
-		.name              = "svga",
-		.mode              = VMODE_SVGA,
-        .width             = 800,
-        .height            = 600,
-        .field_height      = 600,
-        .aspect_ratio_num  = 4,
-        .aspect_ratio_den  = 3,
-        .sync_duration_num = 60,
-        .sync_duration_den = 1,
-    }, 
-    { /* VMODE_XGA */
-		.name              = "xga",
-		.mode              = VMODE_XGA,
-        .width             = 1024,
-        .height            = 768,
-        .field_height      = 768,
-        .aspect_ratio_num  = 4,
-        .aspect_ratio_den  = 3,
-        .sync_duration_num = 60,
-        .sync_duration_den = 1,
-    }, 
-    { /* VMODE_sxga */
-		.name              = "sxga",
-		.mode              = VMODE_SXGA,
-        .width             = 1280,
-        .height            = 1024,
-        .field_height      = 1024,
-        .aspect_ratio_num  = 5,
-        .aspect_ratio_den  = 4,
-        .sync_duration_num = 60,
-        .sync_duration_den = 1,
-    }, 
+
 };
 
 static const struct file_operations am_tv_fops = {
 	.open	= NULL,  
 	.read	= NULL,//am_tv_read, 
 	.write	= NULL, 
-	.unlocked_ioctl	= NULL,//am_tv_ioctl, 
+	.ioctl	= NULL,//am_tv_ioctl, 
 	.release	= NULL, 	
 	.poll		= NULL,
 };
@@ -302,24 +244,25 @@ static const vinfo_t *tv_get_current_info(void)
 
 static int tv_set_current_vmode(vmode_t mod)
 {
-	if ((mod&VMODE_MODE_BIT_MASK)> VMODE_SXGA)
+    	vmode_t mode = mod&VMODE_MODE_BIT_MASK;
+	if (mode > VMODE_1080P_50HZ) {
+		amlog_mask_level(LOG_MASK_PARA, LOG_LEVEL_HIGH,"Invalid vmode: %d\n", mod);
 		return -EINVAL;
+	}
 
-	info->vinfo = &tv_info[mod];
-	if(mod&VMODE_LOGO_BIT_MASK)  return 0;
+	info->vinfo = &tv_info[mode];
+	if (mod & VMODE_LOGO_BIT_MASK)
+		return 0;
 
-	tvoutc_setmode(vmode_tvmode_tab[mod]);
-//	change_vdac_setting(get_current_vdac_setting(),mod);
+	tvoutc_setmode(vmode_tvmode_tab[mode]);
+	//change_vdac_setting(get_current_vdac_setting(),mod);
 	return 0;
 }
 
 static vmode_t tv_validate_vmode(char *mode)
 {
 	const vinfo_t *info = get_valid_vinfo(mode);
-	if(info->mode >= VMODE_VGA){
-	//WRITE_CBUS_REG(PIN_MUX_REG_0,READ_CBUS_REG(PIN_MUX_REG_0)|(3<<20));
-	aml_write_reg32(P_PIN_MUX_REG_0,aml_read_reg32(P_PIN_MUX_REG_0)|(3<<20));
-	}
+	
 	if (info)
 		return info->mode;
 	
@@ -340,7 +283,7 @@ static int tv_vmode_is_supported(vmode_t mode)
 }
 static int tv_module_disable(vmode_t cur_vmod)
 {
-	//video_dac_disable();
+	video_dac_disable();
 	return 0;
 }
 #ifdef  CONFIG_PM
@@ -405,7 +348,7 @@ static void  parse_vdac_setting(char *para)
 	}
 	amlog_mask_level(LOG_MASK_PARA,LOG_LEVEL_LOW,"current vdac setting:0x%x\n",vdac_sequence);
 	
-	change_vdac_setting(vdac_sequence,get_current_vmode());
+	//change_vdac_setting(vdac_sequence,get_current_vmode());
 }
 static  struct  class_attribute   *tv_attr[]={
 &class_TV_attr_vdac_setting,
@@ -437,8 +380,6 @@ static int __init tv_init_module(void)
 	int  ret ;
 
 	info=(disp_module_info_t*)kmalloc(sizeof(disp_module_info_t),GFP_KERNEL) ;
-    printk("%s\n", __func__);
-
 	if (!info)
 	{
 		amlog_mask_level(LOG_MASK_INIT,LOG_LEVEL_HIGH,"can't alloc display info struct\r\n");
@@ -448,13 +389,13 @@ static int __init tv_init_module(void)
 	memset(info, 0, sizeof(disp_module_info_t));
 
 	sprintf(info->name,TV_CLASS_NAME) ;
-	ret=register_chrdev(0,info->name,&am_tv_fops);
+	ret=register_chrdev(TV_CONF_MAJOR,info->name,&am_tv_fops);
 	if(ret <0) 
 	{
 		amlog_mask_level(LOG_MASK_INIT,LOG_LEVEL_HIGH,"register char dev tv error\r\n");
 		return  ret ;
 	}
-	info->major=ret;
+	info->major=TV_CONF_MAJOR;
 	amlog_mask_level(LOG_MASK_INIT,LOG_LEVEL_HIGH,"major number %d for disp\r\n",ret);
 	if(vout_register_server(&tv_server))
 	{

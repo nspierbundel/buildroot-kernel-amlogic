@@ -107,14 +107,66 @@ static   int* parse_para(char *para,char   *para_num)
 
 static  void  read_reg(char *para)
 {
-	printk("please use new interface[ /sys/class/amlogic/debug]\n");
-	return ;
+	char  count=2;
+	vout_reg_t  reg;
+
+	memcpy(&reg,parse_para(para+1,&count),sizeof(vout_reg_t));
+	if(reg.value==0|| reg.value > 100) 
+	reg.value=1;
+	if (((*para) == 'm') || ((*para) == 'M'))
+	{	
+		for(count=0;count < reg.value;count++)
+		{
+			amlog_level(LOG_LEVEL_HIGH,"[0x%x]-[0x%x] : 0x%x\r\n", CBUS_REG_ADDR(reg.addr),reg.addr, READ_MPEG_REG(reg.addr));
+			reg.addr++;
+		}
+	}else if (((*para) == 'p') || ((*para) == 'P')) {
+		for(count=0;count < reg.value;count++)
+		{
+			if (APB_REG_ADDR_VALID(reg.addr))
+		    	amlog_level(LOG_LEVEL_HIGH,"[0x%x]-[0x%x] : 0x%x\r\n", APB_REG_ADDR(reg.addr),reg.addr, READ_APB_REG(reg.addr));
+			reg.addr++;
+		}
+	}else if (((*para) == 'h') || ((*para) == 'H')) {
+		for(count=0;count < reg.value;count++)
+		{
+	    		amlog_level(LOG_LEVEL_HIGH,"[0x%x]-[0x%x] : 0x%x\r\n", AHB_REG_ADDR(reg.addr),reg.addr, READ_AHB_REG(reg.addr));
+			reg.addr++;
+		}
+	}else if (((*para) == 'a') || ((*para) == 'A')) {
+		for(count=0;count < reg.value;count++)
+		{
+	    		amlog_level(LOG_LEVEL_HIGH,"[0x%x]-[0x%x] : 0x%x\r\n", AOBUS_REG_ADDR(reg.addr),reg.addr, READ_AOBUS_REG(reg.addr));
+			reg.addr++;
+		}
+	}
 }
 
 static  void  write_reg(char *para)
 {
-	printk("please use new interface[ /sys/class/amlogic/debug]\n");
-	return ;
+	char  count=2;
+	vout_reg_t  reg;
+
+	memcpy(&reg, parse_para(para+1,&count), sizeof(vout_reg_t));
+
+	if (((*para) == 'm') || ((*para) == 'M')){
+		WRITE_MPEG_REG(reg.addr,reg.value);
+		amlog_level(LOG_LEVEL_HIGH,"[0x%x] = 0x%x 0x%x\r\n", CBUS_REG_ADDR(reg.addr), reg.value, READ_MPEG_REG(reg.addr));
+	}
+	else if (((*para) == 'p') || ((*para) == 'P')) {
+		if (APB_REG_ADDR_VALID(reg.addr)){
+			WRITE_APB_REG(reg.addr,reg.value);
+			amlog_level(LOG_LEVEL_HIGH,"[0x%x] = 0x%x 0x%x\r\n", APB_REG_ADDR(reg.addr), reg.value, READ_APB_REG(reg.addr));
+		}
+	}		
+	else if (((*para) == 'h') || ((*para) == 'H')) {
+		WRITE_AHB_REG(reg.addr,reg.value);
+		amlog_level(LOG_LEVEL_HIGH,"[0x%x] = 0x%x 0x%x\r\n", AHB_REG_ADDR(reg.addr), reg.value, READ_AHB_REG(reg.addr));
+	}	
+	else if (((*para) == 'a') || ((*para) == 'A')) {
+		WRITE_AOBUS_REG(reg.addr,reg.value);
+		amlog_level(LOG_LEVEL_HIGH,"[0x%x] = 0x%x 0x%x\r\n", AOBUS_REG_ADDR(reg.addr), reg.value, READ_AOBUS_REG(reg.addr));
+	}	
 }
 
 
@@ -124,13 +176,11 @@ static int  meson_vout_suspend(struct platform_device *pdev, pm_message_t state)
 static int  meson_vout_resume(struct platform_device *pdev);
 #endif
 
-
-
 static  void  set_vout_mode(char * name)
 {
 	vmode_t    mode;
 
-	amlog_mask_level(LOG_MASK_PARA,LOG_LEVEL_HIGH,"tvmode set to %s\r\n",name);
+	amlog_mask_level(LOG_MASK_PARA,LOG_LEVEL_LOW,"tvmode set to %s\r\n",name);
 	mode=validate_vmode(name);
 	if(VMODE_MAX==mode)
 	{
@@ -143,9 +193,8 @@ static  void  set_vout_mode(char * name)
 		return ;
 	}
 	set_current_vmode(mode);
-	amlog_mask_level(LOG_MASK_PARA,LOG_LEVEL_HIGH,"new mode %s set ok\r\n",name);
+	amlog_mask_level(LOG_MASK_PARA,LOG_LEVEL_LOW,"new mode %s set ok\r\n",name);
 	vout_notifier_call_chain(VOUT_EVENT_MODE_CHANGE,&mode) ;
-	printk("%s[%d]\n", __func__, __LINE__);
 }
 
 char* get_vout_mode_internal(void)
@@ -277,7 +326,7 @@ static void meson_vout_late_resume(struct early_suspend *h)
 **	vout driver interface  
 **
 ******************************************************************/
-static int 
+static int __init
  meson_vout_probe(struct platform_device *pdev)
 {
 	int ret =-1;
@@ -288,6 +337,7 @@ static int
     early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN;
     early_suspend.suspend = meson_vout_early_suspend;
     early_suspend.resume = meson_vout_late_resume;
+    early_suspend.param = pdev;
 	register_early_suspend(&early_suspend);
 #endif
 
@@ -339,8 +389,7 @@ vout_driver = {
 static int __init vout_init_module(void)
 {
 	int ret =0;
-    
-    printk("%s\n", __func__);
+
 	if (platform_driver_register(&vout_driver)) 
 	{
        		amlog_level(LOG_LEVEL_HIGH,"failed to register osd driver\n");

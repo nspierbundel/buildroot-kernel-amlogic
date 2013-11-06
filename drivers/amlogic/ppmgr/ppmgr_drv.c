@@ -25,8 +25,6 @@
 #include "ppmgr_log.h"
 #include "ppmgr_pri.h"
 #include "ppmgr_dev.h"
-#include <linux/ppmgr/ppmgr.h>
-#include <linux/ppmgr/ppmgr_status.h>
 
 /***********************************************************************
 *
@@ -34,23 +32,9 @@
 *
 ************************************************************************/
 static int ppmgr_enable_flag=0;
-static int ppmgr_flag_change = 0;
 static int property_change = 0;
 static int buff_change = 0;
-
-static platform_type_t platform_type = PLATFORM_MID; 
 ppmgr_device_t  ppmgr_device;
-#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
-extern void Reset3Dclear(void);
-extern void Set3DProcessPara(unsigned mode);
-#endif
-#ifdef CONFIG_POST_PROCESS_MANAGER_PPSCALER
-static bool scaler_pos_reset = false;
-#endif
-platform_type_t get_platform_type(void)
-{
-	return	platform_type;
-}
 
 int get_bypass_mode(void)
 {
@@ -75,95 +59,14 @@ void set_buff_change(int flag)
     buff_change = flag;	
 }
 
-#ifdef CONFIG_POST_PROCESS_MANAGER_PPSCALER
-bool get_scaler_pos_reset(void)
-{
-    return scaler_pos_reset;	
-}
-void set_scaler_pos_reset(bool flag)
-{
-    scaler_pos_reset = flag;	
-}
-#endif
-
 int get_ppmgr_status(void) {
     return ppmgr_enable_flag;
 }
 
 void set_ppmgr_status(int flag) {
-	if(flag != ppmgr_enable_flag){
-		ppmgr_flag_change = 1;
-	}
-    if(flag >= 0){
-        ppmgr_enable_flag=flag;
-    }
-    else {
-        ppmgr_enable_flag=0;
-    }
+    if(flag) ppmgr_enable_flag=1;
+    else ppmgr_enable_flag=0;
 }
-
-/***********************************************************************
-*
-* 3D function.
-*
-************************************************************************/
-#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
-unsigned get_ppmgr_3dmode(void)
-{
-    return ppmgr_device.ppmgr_3d_mode;
-}
-
-void set_ppmgr_3dmode(unsigned mode)
-{
-    if(ppmgr_device.ppmgr_3d_mode != mode){
-        ppmgr_device.ppmgr_3d_mode = mode;
-        Set3DProcessPara(ppmgr_device.ppmgr_3d_mode);
-        Reset3Dclear();
-        //property_change = 1;
-    }
-}
-
-unsigned get_ppmgr_viewmode(void)
-{
-    return ppmgr_device.viewmode;
-}
-
-void set_ppmgr_viewmode(unsigned mode)
-{
-    if((ppmgr_device.viewmode != mode)&&(mode<VIEWMODE_MAX)){
-        ppmgr_device.viewmode = mode;
-        Reset3Dclear();
-        //property_change = 1;
-    }
-}
-
-unsigned get_ppmgr_scaledown(void)
-{
-    return ppmgr_device.scale_down;
-}
-
-void set_ppmgr_scaledown(unsigned scale_down)
-{
-    if((ppmgr_device.scale_down != scale_down)&&(scale_down<3)){
-        ppmgr_device.scale_down = scale_down;
-        Reset3Dclear();
-    }
-}
-
-unsigned get_ppmgr_direction3d(void)
-{
-    return ppmgr_device.direction_3d;
-}
-
-void set_ppmgr_direction3d(unsigned angle)
-{
-    if((ppmgr_device.direction_3d != angle)&&(angle<4)){
-        ppmgr_device.direction_3d = angle;
-        Reset3Dclear();
-        //property_change = 1;
-    }
-}
-#endif
 
 /***********************************************************************
 *
@@ -425,8 +328,6 @@ static ssize_t ppscaler_write(struct class *cla,
         else
             video_scaler_notify(0);
         ppmgr_device.ppscaler_flag = flag;
-        if(ppmgr_device.ppscaler_flag == 0)
-            set_scaler_pos_reset(true);
     }
     size = endp - buf;
     return count;
@@ -465,334 +366,6 @@ static ssize_t ppscaler_rect_write(struct class *cla,
 }
 #endif
 
-static ssize_t receiver_read(struct class *cla,struct class_attribute *attr,char *buf)
-{
-	if(ppmgr_device.receiver==1)
-		return snprintf(buf,80,"video stream out to video4linux\n");
-	else 
-		return snprintf(buf,80,"video stream out to vlayer\n");
-}
-
-static ssize_t receiver_write(struct class *cla,
-					struct class_attribute *attr,
-					const char *buf, size_t count)
-{
-	ssize_t size;
-	char *endp;
-    if(buf[0]!='0'&&buf[0]!='1') {
-		printk("device to whitch the video stream decoded\n");
-		printk("0: to video layer\n");
-		printk("1: to amlogic video4linux /dev/video10\n");
-		return 0;
-	}
-	ppmgr_device.receiver = simple_strtoul(buf, &endp, 0);
-	vf_ppmgr_reset(0);
-	size = endp - buf;
-	return count;
-}
-
-static ssize_t platform_type_read(struct class *cla,struct class_attribute *attr,char *buf)
-{
-	if(platform_type ==PLATFORM_TV){
-		return snprintf(buf,80,"current platform is TV\n");
-	}else if(platform_type ==PLATFORM_MID){
-		return snprintf(buf,80,"current platform is MID\n");
-	}else{ 
-		return snprintf(buf,80,"current platform is MBX\n");
-	}
-}
-
-static ssize_t platform_type_write(struct class *cla,
-					struct class_attribute *attr,
-					const char *buf, size_t count)
-{
-	ssize_t size;
-	char *endp;
-	platform_type = simple_strtoul(buf, &endp, 0);
-	size = endp - buf;
-	return count;
-}
-
-#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
-static ssize_t _3dmode_read(struct class *cla,struct class_attribute *attr,char *buf)
-{
-    return snprintf(buf,80,"current 3d mode is 0x%x\n",ppmgr_device.ppmgr_3d_mode);
-}
-
-static ssize_t _3dmode_write(struct class *cla,
-					struct class_attribute *attr,
-					const char *buf, size_t count)
-{
-    ssize_t size;
-    char *endp;
-    unsigned mode = simple_strtoul(buf, &endp, 0);
-    set_ppmgr_3dmode(mode);
-    size = endp - buf;
-    return count;
-}
-
-static ssize_t viewmode_read(struct class *cla,struct class_attribute *attr,char *buf)
-{
-    const char *viewmode_str[] = {"normal", "full", "4:3","16:9","1:1"};
-    return snprintf(buf,80,"current view mode is %d:%s\n",ppmgr_device.viewmode,viewmode_str[ppmgr_device.viewmode]);
-}
-
-static ssize_t viewmode_write(struct class *cla,
-					struct class_attribute *attr,
-					const char *buf, size_t count)
-{
-    ssize_t size;
-    char *endp;
-    unsigned mode = simple_strtoul(buf, &endp, 0);
-    set_ppmgr_viewmode(mode);
-    size = endp - buf;
-    return count;
-}
-
-static ssize_t doublemode_read(struct class *cla,struct class_attribute *attr,char *buf)
-{
-    const char *doublemode_str[] = {"normal", "horizontal double", "vertical double"};
-    unsigned mode = get_ppmgr_3dmode();
-    mode = ((mode & PPMGR_3D_PROCESS_DOUBLE_TYPE)>>PPMGR_3D_PROCESS_DOUBLE_TYPE_SHIFT);
-    return snprintf(buf,80,"current 3d double scale mode is %d:%s\n",mode,doublemode_str[mode]);
-}
-
-static ssize_t doublemode_write(struct class *cla,
-					struct class_attribute *attr,
-					const char *buf, size_t count)
-{
-    ssize_t size;
-    char *endp;
-    unsigned flag = simple_strtoul(buf, &endp, 0);
-    unsigned mode = get_ppmgr_3dmode();
-    mode = (mode & (~PPMGR_3D_PROCESS_DOUBLE_TYPE))|((flag<<PPMGR_3D_PROCESS_DOUBLE_TYPE_SHIFT)&(PPMGR_3D_PROCESS_DOUBLE_TYPE));
-    set_ppmgr_3dmode(mode);
-    size = endp - buf;
-    return count;
-}
-
-static ssize_t switchmode_read(struct class *cla,struct class_attribute *attr,char *buf)
-{
-    const char *switchmode_str[] = {"disable", "enable"};
-    unsigned mode = get_ppmgr_3dmode();
-    unsigned flag = (mode & PPMGR_3D_PROCESS_SWITCH_FLAG)?1:0;
-    return snprintf(buf,80,"current 3d switch mode is %d:%s\n",flag,switchmode_str[flag]);
-}
-
-static ssize_t switchmode_write(struct class *cla,
-					struct class_attribute *attr,
-					const char *buf, size_t count)
-{
-    ssize_t size;
-    char *endp;
-    int flag = simple_strtoul(buf, &endp, 0);
-    unsigned mode = get_ppmgr_3dmode();
-    if(!flag)
-        mode = mode & (~PPMGR_3D_PROCESS_SWITCH_FLAG);
-    else
-        mode = mode | PPMGR_3D_PROCESS_SWITCH_FLAG;
-    set_ppmgr_3dmode(mode);
-    size = endp - buf;
-    return count;
-}
-
-static ssize_t direction_3d_read(struct class *cla,struct class_attribute *attr,char *buf)
-{
-    const char *direction_str[] = {"0 degree", "90 degree", "180 degree","270 degree"};
-    //unsigned mode = get_ppmgr_3dmode();
-    //mode = ((mode & PPMGR_3D_PROCESS_3D_ROTATE_DIRECTION_MASK)>>PPMGR_3D_PROCESS_3D_ROTATE_DIRECTION_VAULE_SHIFT);    
-    //return snprintf(buf,80,"current 3d direction is %d:%s\n",mode,direction_str[mode]);
-    unsigned angle = get_ppmgr_direction3d();
-    return snprintf(buf,80,"current 3d direction is %d:%s\n",angle,direction_str[angle]);
-}
-
-static ssize_t direction_3d_write(struct class *cla,
-					struct class_attribute *attr,
-					const char *buf, size_t count)
-{
-    ssize_t size;
-    char *endp;
-    int flag = simple_strtoul(buf, &endp, 0);
-    //unsigned mode = get_ppmgr_3dmode();
-    //mode = (mode & (~PPMGR_3D_PROCESS_3D_ROTATE_DIRECTION_MASK))|((flag<<PPMGR_3D_PROCESS_3D_ROTATE_DIRECTION_VAULE_SHIFT)&(PPMGR_3D_PROCESS_3D_ROTATE_DIRECTION_MASK));
-    //set_ppmgr_3dmode(mode);
-    set_ppmgr_direction3d(flag);
-    size = endp - buf;
-    return count;
-}
-
-static ssize_t scale_down_read(struct class *cla,struct class_attribute *attr,char *buf)
-{
-    const char *value_str[] = {"noraml", "div 2", "div 3","div 4"};
-    unsigned mode = ppmgr_device.scale_down;
-    return snprintf(buf,80,"current scale down value is %d:%s\n",mode+1,value_str[mode]);
-}
-
-static ssize_t scale_down_write(struct class *cla,
-					struct class_attribute *attr,
-					const char *buf, size_t count)
-{
-    ssize_t size;
-    char *endp;
-    unsigned mode = simple_strtoul(buf, &endp, 0);
-    set_ppmgr_scaledown(mode);
-    size = endp - buf;
-    return count;
-}
-
-/******************************************************************
-					3D TV usage
-*********************************************************************/
-
-frame_info_t frame_info;
-
-static int ppmgr_view_mode = 0 ;
-static int ppmgr_vertical_sample =1 ;
-static int ppmgr_scale_width = 800 ;
-int ppmgr_cutwin_top = 0;
-int ppmgr_cutwin_left = 0;
-int get_ppmgr_change_notify(void)
-{
-	if(ppmgr_flag_change){
-		ppmgr_flag_change = 0 ;
-		return 1;
-	}else{
-		return 0;
-	}
-}
-
-int get_ppmgr_view_mode(void)
-{
-	return ppmgr_view_mode;
-}
-int get_ppmgr_vertical_sample(void)
-{
-	return ppmgr_vertical_sample;
-}
-int get_ppmgr_scale_width(void)
-{
-	return ppmgr_scale_width;
-}
-
-static int depth = 3200;  /*12.5 pixels*/
-void set_depth(int para)
-{
-	depth = para;
-}
-int get_depth(void)
-{
-	return depth;
-}
-static ssize_t read_depth(struct class *cla,struct class_attribute *attr,char *buf)
-{
-	 return snprintf(buf,80,"current depth is %d\n",depth);
-}
-static ssize_t write_depth(struct class *cla, struct class_attribute *attr, const char *buf,
-                                size_t count)
-{
-    int r;
-    char *endp;
-
-    r = simple_strtoul(buf, &endp, 0);
-	printk("r is %d\n" ,r);
-	set_depth(r) ;
-    return count;
-}
-static ssize_t read_view_mode(struct class *cla,struct class_attribute *attr,char *buf)
-{
-	 return snprintf(buf,80,"current view mode is %d\n",ppmgr_view_mode);
-}
-static ssize_t write_view_mode(struct class *cla, struct class_attribute *attr, const char *buf,
-                                size_t count)
-{
-    int r;
-    char *endp;
-
-    r = simple_strtoul(buf, &endp, 0);
-    ppmgr_view_mode = r ;
-    return count;
-}
-
-static ssize_t read_vertical_sample(struct class *cla,struct class_attribute *attr,char *buf)
-{
-	 return snprintf(buf,80,"ppmgr_vertical_sample %d\n",ppmgr_vertical_sample);
-}
-static ssize_t write_vertical_sample(struct class *cla, struct class_attribute *attr, const char *buf,
-                                size_t count)
-{
-    int r;
-    char *endp;
-
-    r = simple_strtoul(buf, &endp, 0);
-    ppmgr_vertical_sample = r ;
-    return count;
-}
-static ssize_t read_scale_width(struct class *cla,struct class_attribute *attr,char *buf)
-{
-	 return snprintf(buf,80,"ppmgr_scale_width is %d\n",ppmgr_scale_width);
-}
-static ssize_t write_scale_width(struct class *cla, struct class_attribute *attr, const char *buf,
-                                size_t count)
-{
-    int r;
-    char *endp;
-
-    r = simple_strtoul(buf, &endp, 0);
-    ppmgr_scale_width = r ;
-    return count;
-}
-static void set_cut_window(const char *para)
-{
-  int parsed[2];
-
-  if (likely(parse_para(para, 2, parsed) == 2)) {
-	      int top ,left;
-	      top = parsed[0] ;
-	      left = parsed[1];
-	      ppmgr_cutwin_top = top ;
-	      ppmgr_cutwin_left = left ;
-     }
- }
- 
-static ssize_t cut_win_show(struct class *cla, struct class_attribute *attr, char *buf)
-{
-    return snprintf(buf, 80, "cut win top is %d ; cut win left is %d \n", ppmgr_cutwin_top,ppmgr_cutwin_left);
-}
-
-static ssize_t cut_win_store(struct class *cla, struct class_attribute *attr, const char *buf,
-                                size_t count)
-{
-	set_cut_window(buf);
-    return strnlen(buf, count);
-}
-
-#endif
-static ssize_t mirror_read(struct class *cla,struct class_attribute *attr,char *buf)
-{
-	if(ppmgr_device.mirror_flag == 1)
-		return snprintf(buf,80,"currnet mirror mode is l-r mirror mode. value is: %d.\n",ppmgr_device.mirror_flag);
-	else if(ppmgr_device.mirror_flag == 2)
-		return snprintf(buf,80,"currnet mirror mode is t-b mirror mode. value is: %d.\n",ppmgr_device.mirror_flag);
-	else
-		return snprintf(buf,80,"currnet mirror mode is normal mode. value is: %d.\n",ppmgr_device.mirror_flag);
-}
-
-static ssize_t mirror_write(struct class *cla,
-					struct class_attribute *attr,
-					const char *buf, size_t count)
-{
-	ssize_t size;
-	char *endp;
-	ppmgr_device.mirror_flag = simple_strtoul(buf, &endp, 0);
-	if (ppmgr_device.mirror_flag > 2)
-		ppmgr_device.mirror_flag = 0;
-	size = endp - buf;
-	return count;
-}
-
-/**************************************************************
- 			3DTV usage
-*******************************************************************/
 extern int  vf_ppmgr_get_states(vframe_states_t *states);
 
 static ssize_t ppmgr_vframe_states_show(struct class *cla, struct class_attribute* attr, char* buf)
@@ -850,66 +423,6 @@ static struct class_attribute ppmgr_class_attrs[] = {
            ppscaler_rect_read,
            ppscaler_rect_write),   
 #endif
-       __ATTR(vtarget,
-           S_IRUGO | S_IWUSR,
-           receiver_read,
-           receiver_write),
-#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
-    __ATTR(ppmgr_3d_mode,
-           S_IRUGO | S_IWUSR,
-           _3dmode_read,
-           _3dmode_write),      
-    __ATTR(viewmode,
-           S_IRUGO | S_IWUSR,
-           viewmode_read,
-           viewmode_write), 
-    __ATTR(doublemode,
-           S_IRUGO | S_IWUSR,
-           doublemode_read,
-           doublemode_write), 
-    __ATTR(switchmode,
-           S_IRUGO | S_IWUSR,
-           switchmode_read,
-           switchmode_write), 
-    __ATTR(direction_3d,
-           S_IRUGO | S_IWUSR,
-           direction_3d_read,
-           direction_3d_write), 
-    __ATTR(scale_down,
-           S_IRUGO | S_IWUSR,
-           scale_down_read,
-           scale_down_write), 
-    __ATTR(depth,
-			S_IRUGO | S_IWUSR,
-			read_depth,
-			write_depth),
-    __ATTR(view_mode,
-			S_IRUGO | S_IWUSR,
-			read_view_mode,
-			write_view_mode),		
-    __ATTR(vertical_sample,
-			S_IRUGO | S_IWUSR,
-			read_vertical_sample,
-			write_vertical_sample),	
-    __ATTR(scale_width,
-			S_IRUGO | S_IWUSR,
-			read_scale_width,
-			write_scale_width),								
-    __ATTR(axis,
-    		S_IRUGO | S_IWUSR,
-		    cut_win_show,
-		    cut_win_store),	
-#endif
-
-    __ATTR(platform_type,
-           S_IRUGO | S_IWUSR,
-           platform_type_read,
-           platform_type_write),
-
-    __ATTR(mirror,
-           S_IRUGO | S_IWUSR,
-           mirror_read,
-           mirror_write),
     __ATTR_RO(ppmgr_vframe_states),
     __ATTR_NULL
 };
@@ -952,8 +465,8 @@ static int ppmgr_open(struct inode *inode, struct file *file)
     return 0;
 }
 
-static long ppmgr_ioctl(struct file *file,
-                        unsigned int cmd, ulong args)
+static int ppmgr_ioctl(struct inode *inode, struct file *filp,
+                 unsigned int cmd, unsigned long args)
 {
     void  __user* argp =(void __user*)args;
     int ret = 0;
@@ -964,14 +477,16 @@ static long ppmgr_ioctl(struct file *file,
     int flag;    	
     frame_info_t frame_info;
 #endif
-#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
-    unsigned mode = 0;
-    int flag = 0;
-    platform_type_t plarform_type;
-#endif
+
     switch (cmd)
     {
 #if 0
+        case PPMGR_IOC_2OSD0:
+            break;
+        case PPMGR_IOC_ENABLE_PP:
+            flag=(int)argp;
+            set_ppmgr_status(flag);
+            break;
         case PPMGR_IOC_CONFIG_FRAME:
             copy_from_user(&frame_info,argp,sizeof(frame_info_t));
             break;
@@ -982,47 +497,6 @@ static long ppmgr_ioctl(struct file *file,
         case PPMGR_IOC_SET_ANGLE:
             ret = _ppmgr_angle_write(args);
             break;
-#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
-        case PPMGR_IOC_ENABLE_PP:
-            mode=(int)argp;
-            plarform_type = get_platform_type();
-            if( plarform_type == PLATFORM_TV){
-            	set_ppmgr_status(mode);            
-            }else{            
-          	  set_ppmgr_3dmode(mode);
-         	}
-            break;
-        case PPMGR_IOC_VIEW_MODE:
-            mode=(int)argp;
-            set_ppmgr_viewmode(mode);
-            break;
-        case PPMGR_IOC_HOR_VER_DOUBLE:
-            flag = (int)argp;
-            mode = get_ppmgr_3dmode();
-            mode = (mode & (~PPMGR_3D_PROCESS_DOUBLE_TYPE))|((flag<<PPMGR_3D_PROCESS_DOUBLE_TYPE_SHIFT)&(PPMGR_3D_PROCESS_DOUBLE_TYPE));
-            set_ppmgr_3dmode(mode);
-            break;
-        case PPMGR_IOC_SWITCHMODE:
-            flag = (int)argp;
-            mode = get_ppmgr_3dmode();
-            if(flag)
-                mode = mode & PPMGR_3D_PROCESS_SWITCH_FLAG ;
-            else
-                mode = mode & (~PPMGR_3D_PROCESS_SWITCH_FLAG);
-            set_ppmgr_3dmode(mode);
-            break;
-        case PPMGR_IOC_3D_DIRECTION:
-            flag = (int)argp;
-            //mode = get_ppmgr_3dmode();
-            //mode = (mode & (~PPMGR_3D_PROCESS_3D_ROTATE_DIRECTION_MASK))|((flag<<PPMGR_3D_PROCESS_3D_ROTATE_DIRECTION_VAULE_SHIFT)&(PPMGR_3D_PROCESS_3D_ROTATE_DIRECTION_MASK));
-            //set_ppmgr_3dmode(mode);
-            set_ppmgr_direction3d(flag);
-            break;
-        case PPMGR_IOC_3D_SCALE_DOWN:
-            mode=(int)argp;
-            set_ppmgr_scaledown(mode);
-            break;
-#endif
         default :
             return -ENOIOCTLCMD;
 		
@@ -1056,7 +530,7 @@ static int ppmgr_release(struct inode *inode, struct file *file)
 static const struct file_operations ppmgr_fops = {
     .owner   = THIS_MODULE,
     .open    = ppmgr_open,  
-    .unlocked_ioctl  = ppmgr_ioctl,
+    .unlocked_ioctl   = ppmgr_ioctl,
     .release = ppmgr_release, 	
 };
 
@@ -1075,7 +549,6 @@ int  init_ppmgr_device(void)
     ppmgr_device.dbg_enable=0;
 	
     ppmgr_device.angle=0;
-    ppmgr_device.bypass =0 ;
     ppmgr_device.videoangle=0;
     ppmgr_device.orientation=0;
 #ifdef CONFIG_POST_PROCESS_MANAGER_PPSCALER
@@ -1084,19 +557,8 @@ int  init_ppmgr_device(void)
     ppmgr_device.scale_h_end = 0;
     ppmgr_device.scale_v_start = 0;
     ppmgr_device.scale_v_end = 0;
-    scaler_pos_reset = false;
 #endif
-	ppmgr_device.receiver=0;
-	ppmgr_device.receiver_format = (GE2D_FORMAT_M24_NV21|GE2D_LITTLE_ENDIAN);
-    ppmgr_device.display_mode = 0;
-#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
-    ppmgr_device.ppmgr_3d_mode = EXTERNAL_MODE_3D_DISABLE ;
-    ppmgr_device.direction_3d = 0;
-    ppmgr_device.viewmode = VIEWMODE_NORMAL;
-    ppmgr_device.scale_down = 0;
-#endif
-    ppmgr_device.mirror_flag  = 0;
-    ppmgr_device.canvas_width = ppmgr_device.canvas_height = 0;
+	ppmgr_device.video_out=0;
     amlog_level(LOG_LEVEL_LOW,"ppmgr_dev major:%d\r\n",ret);
     
     if((ppmgr_device.cla = init_ppmgr_cls())==NULL) return -1;
@@ -1106,8 +568,8 @@ int  init_ppmgr_device(void)
         goto unregister_dev;
     }
     buff_change = 0;
-    ppmgr_register();  
-    if(ppmgr_buffer_init(0) < 0) goto unregister_dev;
+    ppmgr_register();    
+    if(ppmgr_buffer_init()<0) goto unregister_dev;
     //if(start_vpp_task()<0) return -1;
     
     return 0;

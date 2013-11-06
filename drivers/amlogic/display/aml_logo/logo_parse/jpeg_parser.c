@@ -10,7 +10,6 @@
  *
  *******************************************************************/
 #include "logo.h"
-#include <mach/am_regs.h>
 #include <asm/cacheflush.h>
 #include	"amlogo_log.h"
 #include <linux/amlog.h>
@@ -24,6 +23,8 @@
 #include <linux/syscalls.h>
 
 
+#define PROVIDER_NAME   "decoder.jpeg_parser"
+
 static  logo_parser_t    logo_jpeg_parser={
  	.name="jpg",
 	.op={
@@ -35,12 +36,12 @@ static  logo_parser_t    logo_jpeg_parser={
 jpeg_private_t *g_jpeg_parser;
 
 
-static vframe_t *jpeglogo_vf_peek(void *para)
+static vframe_t *jpeglogo_vf_peek(void* op_arg)
 {
 	return (g_jpeg_parser->state== PIC_DECODED) ? &g_jpeg_parser->vf : NULL;
 }
 
-static vframe_t *jpeglogo_vf_get(void *para)
+static vframe_t *jpeglogo_vf_get(void* op_arg)
 {
 	if (g_jpeg_parser->state == PIC_DECODED) {
 		g_jpeg_parser->state = PIC_FETCHED;
@@ -49,13 +50,15 @@ static vframe_t *jpeglogo_vf_get(void *para)
 	
 	return NULL;
 }
-static const struct vframe_operations_s jpeglogo_vf_provider_op =
+static const struct vframe_operations_s jpeglogo_vf_provider =
 {
-    	.peek = jpeglogo_vf_peek,
-    	.get  = jpeglogo_vf_get,
-    	.put  = NULL,
+    .peek = jpeglogo_vf_peek,
+    .get  = jpeglogo_vf_get,
+    .put  = NULL,
 };
+
 static struct vframe_provider_s jpeglogo_vf_prov;
+
 static inline u32 index2canvas(u32 index)
 {
     const u32 canvas_tab[4] = {
@@ -69,7 +72,7 @@ static irqreturn_t jpeglogo_isr(int irq, void *dev_id)
 	u32 reg, index;
      	vframe_t  *pvf=&g_jpeg_parser->vf;	
 
-    	WRITE_MPEG_REG(VDEC_ASSIST_MBOX1_CLR_REG, 1);
+    	WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
 
     	reg = READ_MPEG_REG(MREG_FROM_AMRISC);
 
@@ -308,9 +311,9 @@ static void jpeglogo_prot_init(logo_object_t *plogo)
        WRITE_MPEG_REG(MREG_DECODE_PARAM, 0);
    
        /* clear mailbox interrupt */
-       WRITE_MPEG_REG(VDEC_ASSIST_MBOX1_CLR_REG, 1);
+       WRITE_MPEG_REG(ASSIST_MBOX1_CLR_REG, 1);
        /* enable mailbox interrupt */
-       WRITE_MPEG_REG(VDEC_ASSIST_MBOX1_MASK, 1);
+       WRITE_MPEG_REG(ASSIST_MBOX1_MASK, 1);
 }
 static void setup_vb(u32 addr, int s)
 {
@@ -463,8 +466,8 @@ static  int  jpeg_decode(logo_object_t *plogo)
 	{
 		if(plogo->para.output_dev_type == LOGO_DEV_VID)
 		{
-#ifdef CONFIG_AM_VIDEO 
-                     vf_provider_init(&jpeglogo_vf_prov, "jpeglogo_provider", &jpeglogo_vf_provider_op, NULL);
+#ifdef CONFIG_AM_VIDEO 		
+            vf_provider_init(&jpeglogo_vf_prov, PROVIDER_NAME, &jpeglogo_vf_provider, NULL);
 			vf_reg_provider(&jpeglogo_vf_prov);
 #endif
 			kernel_thread(thread_progress, plogo, 0);

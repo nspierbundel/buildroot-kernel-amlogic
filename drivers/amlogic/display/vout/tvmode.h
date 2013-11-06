@@ -38,12 +38,7 @@ typedef enum {
     TVMODE_720P_50HZ ,
     TVMODE_1080I_50HZ ,
     TVMODE_1080P_50HZ ,
-    TVMODE_1080P_24HZ ,
-    TVMODE_VGA ,
-    TVMODE_SVGA,
-    TVMODE_XGA,
-    TVMODE_SXGA,
-    TVMODE_MAX    
+    TVMODE_MAX   
 } tvmode_t;
 
 #endif /* TVMODE_H */

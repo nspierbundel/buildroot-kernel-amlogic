@@ -19,6 +19,6 @@ extern void get_freescale_buf_info(char** start,unsigned int* size);
 /*  freescale buffer op. */
 extern int freescale_buffer_init(void);
 
-extern int freescale_register(void);
+extern int freescale_register();
 
 #endif /* _FREESCALE_PRI_INCLUDE__ */

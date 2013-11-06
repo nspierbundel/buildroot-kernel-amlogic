@@ -1,7 +1,7 @@
 #ifndef _OSD_HW_DEF_H
 #define	_OSD_HW_DEF_H
 #include <linux/amports/vframe_provider.h>
-#include <plat/fiq_bridge.h>
+#include <linux/fiq_bridge.h>
 #include "osd_hw.h"
 
 /************************************************************************
@@ -95,11 +95,6 @@ typedef struct {
 	u16	v_enable;
 } osd_ext_scale_t;
 
-typedef  struct{
-	u16	hfs_enable;
-	u16	vfs_enable;
-}osd_ext_freescale_t;
-
 typedef struct {
 	osd_ext_scale_t origin_scale;
 	u16 enable;
@@ -116,8 +111,6 @@ typedef struct {
 	pandata_t       pandata[HW_OSD_COUNT];
 	dispdata_t      dispdata[HW_OSD_COUNT];
 	pandata_t       scaledata[HW_OSD_COUNT];
-	pandata_t 	free_scale_data[HW_OSD_COUNT];
-	pandata_t	free_dst_data[HW_OSD_COUNT];
 	u32             gbl_alpha[HW_OSD_COUNT];
 	u32             color_key[HW_OSD_COUNT];
 	u32             color_key_enable[HW_OSD_COUNT];
@@ -125,7 +118,6 @@ typedef struct {
 	u32             reg_status_save;
 	bridge_item_t   fiq_handle_item;
 	osd_ext_scale_t scale[HW_OSD_COUNT];
-	osd_ext_freescale_t free_scale[HW_OSD_COUNT];
 	u32             free_scale_enable[HW_OSD_COUNT];
 	u32             free_scale_width[HW_OSD_COUNT];
 	u32             free_scale_height[HW_OSD_COUNT];
@@ -138,11 +130,10 @@ typedef struct {
 	hw_list_t       reg[HW_OSD_COUNT][HW_REG_INDEX_MAX];
 	u32             block_windows[HW_OSD_COUNT][HW_OSD_BLOCK_REG_COUNT];
 	u32             block_mode[HW_OSD_COUNT];
-	u32		free_scale_mode[HW_OSD_COUNT];
-	u32		osd_reverse[HW_OSD_COUNT];
 	u32             canvas_conf[HW_OSD_COUNT];
+	pandata_t       free_scale_data[HW_OSD_COUNT];
+	u32             enforce_progressive;
 	u32             clone[HW_OSD_COUNT];
-	u32             angle[HW_OSD_COUNT];
 } hw_para_t;
 
 /************************************************************************
@@ -150,16 +141,6 @@ typedef struct {
 **	func declare  part
 **
 **************************************************************************/
-static void osd1_update_color_mode(void);
-static void osd1_update_enable(void);
-static void osd1_update_color_key(void);
-static void osd1_update_color_key_enable(void);
-static void osd1_update_gbl_alpha(void);
-static void osd1_update_order(void);
-static void osd1_update_disp_geometry(void);
-static void osd1_update_disp_scale_enable(void);
-static void osd1_update_disp_3d_mode(void);
-
 static void osd2_update_color_mode(void);
 static void osd2_update_enable(void);
 static void osd2_update_color_key_enable(void);
@@ -169,13 +150,28 @@ static void osd2_update_order(void);
 static void osd2_update_disp_geometry(void);
 static void osd2_update_disp_scale_enable(void);
 static void osd2_update_disp_3d_mode(void);
+static void osd2_update_enforce_progressive(void);
+static void osd2_update_canvas_conf(void);
+
+static void osd1_update_color_mode(void);
+static void osd1_update_enable(void);
+static void osd1_update_color_key(void);
+static void osd1_update_color_key_enable(void);
+static void osd1_update_gbl_alpha(void);
+static void osd1_update_order(void);
+static void osd1_update_disp_geometry(void);
+static void osd1_update_disp_scale_enable(void);
+static void osd1_update_disp_3d_mode(void);
+static void osd1_update_enforce_progressive(void);
+static void osd1_update_canvas_conf(void);
 
 /************************************************************************
 **
 **	global varible  define  part
 **
 **************************************************************************/
-static DEFINE_SPINLOCK(osd_ext_lock);
+//LIST_HEAD(osd_ext_update_list);
+static spinlock_t osd_ext_lock = SPIN_LOCK_UNLOCKED;
 static hw_para_t osd_ext_hw;
 static unsigned long lock_flags;
 #ifdef FIQ_VSYNC
@@ -192,6 +188,8 @@ static update_func_t hw_func_array[HW_OSD_COUNT][HW_REG_INDEX_MAX] = {
 		osd1_update_order,
 		osd1_update_disp_geometry,
 		osd1_update_disp_scale_enable,
+		osd1_update_enforce_progressive,
+		osd1_update_canvas_conf,
 	},
 	{
 		osd2_update_color_mode,
@@ -202,6 +200,8 @@ static update_func_t hw_func_array[HW_OSD_COUNT][HW_REG_INDEX_MAX] = {
 		osd2_update_order,
 		osd2_update_disp_geometry,
 		osd2_update_disp_scale_enable,
+		osd2_update_enforce_progressive,
+		osd2_update_canvas_conf,
 	},
 };
 

@@ -136,17 +136,6 @@ void osddev_get_free_scale_enable(u32 index, u32 *free_scale_enable)
 	osd_get_free_scale_enable_hw(index, free_scale_enable);
 }
 
-void osddev_free_scale_mode(u32 index ,u32 freescale_mode)
-{
-	osd_free_scale_mode_hw(index, freescale_mode);
-
-}
-
-void osddev_get_free_scale_mode(u32 index, u32 *freescale_mode)
-{
-	osd_get_free_scale_mode_hw(index, freescale_mode);
-}
-
 void osddev_free_scale_width(u32 index ,u32 width)
 {
 	//at present we only support osd1 & osd2 have the same random scale mode.
@@ -199,19 +188,14 @@ void osddev_get_scale_axis(u32 index, s32 *x0, s32 *y0, s32 *x1, s32 *y1)
 	osd_get_scale_axis_hw(index, x0, y0, x1, y1);
 }
 
-void osddev_get_window_axis(u32 index, s32 *x0, s32 *y0, s32 *x1, s32 *y1)
-{
-	osd_get_window_axis_hw(index, x0, y0, x1, y1);
-}
-
-void osddev_set_window_axis(u32 index, s32 x0, s32 y0, s32 x1, s32 y1)
-{
-	osd_set_window_axis_hw(index, x0, y0, x1, y1);
-}
-
 void osddev_get_osd_info(u32 index, s32 (*posdval)[4], u32 (*posdreg)[5], s32 info_flag)
 {
 	osd_get_osd_info_hw(index, posdval, posdreg, info_flag);
+}
+
+void osddev_set_canvas_conf(u32 index, u32 canvas_conf)
+{
+	osd_set_canvas_conf_hw(index, canvas_conf);
 }
 
 void osddev_set_2x_scale(u32 index,u16 h_scale_enable,u16 v_scale_enable)
@@ -222,16 +206,6 @@ void osddev_set_2x_scale(u32 index,u16 h_scale_enable,u16 v_scale_enable)
 void osddev_get_flush_rate(u32 *flush_rate)
 {
 	osd_get_flush_rate(flush_rate);
-}
-
-void osddev_get_osd_reverse(u32 index, u32 *reverse)
-{
-	osd_get_osd_reverse_hw(index, reverse);
-}
-
-void osddev_set_osd_reverse(u32 index, u32 reverse)
-{
-	osd_set_osd_reverse_hw(index, reverse);
 }
 
 void osddev_set_block_windows(u32 index, u32 *block_windows)
@@ -252,6 +226,16 @@ void osddev_set_block_mode(u32 index, u32 mode)
 void osddev_get_block_mode(u32 index, u32 *mode)
 {
 	osd_get_block_mode_hw(index, mode);
+}
+
+void osddev_set_enforce_progressive(u32 index, u32 enforce_progressive)
+{
+	osd_set_enforce_progressive_hw(index, enforce_progressive);
+}
+
+void osddev_get_enforce_progressive(u32 index, u32 *enforce_progressive)
+{
+	osd_get_enforce_progressive_hw(index, enforce_progressive);
 }
 
 void osddev_enable(int enable,int  index)

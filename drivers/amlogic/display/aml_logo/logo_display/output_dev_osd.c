@@ -209,8 +209,6 @@ static  int  osd_transfer(logo_object_t *plogo)
 	src_dst_info_t  op_info;
 	ge2d_context_t  *context;
 	config_para_t	ge2d_config;
-	int  screen_mem_start;
-	int  screen_size ;
 	u32  	canvas_index;
 	canvas_t	canvas;		
 	
@@ -262,23 +260,12 @@ static  int  osd_transfer(logo_object_t *plogo)
 		op_info.dst_rect.y=0;
 		op_info.dst_rect.w=plogo->dev->vinfo->width;
 		op_info.dst_rect.h=plogo->dev->vinfo->height;
-	
 		break;	
 	}
 	if(strcmp(plogo->parser->name,"bmp")==0)
 	{
-		screen_mem_start = plogo->platform_res[plogo->para.output_dev_type].mem_start;
-		screen_size=plogo->dev->vinfo->width*plogo->dev->vinfo->height*(plogo->parser->decoder.bmp.color_depth>>3);
-		ge2d_config.src_dst_type=plogo->dev->idx?ALLOC_OSD1:ALLOC_OSD0;
-		ge2d_config.alu_const_color=0x000000ff;
-		ge2d_config.src_format=GE2D_FORMAT_S24_RGB;
-		ge2d_config.src_planes[0].addr = screen_mem_start+screen_size;
-		ge2d_config.src_planes[0].w = plogo->parser->logo_pic_info.width;
-		ge2d_config.src_planes[0].h = plogo->parser->logo_pic_info.height;
-		context=dev_ge2d_setup(&ge2d_config);
-		if(NULL==context) return -OUTPUT_DEV_SETUP_FAIL;
-		amlog_mask_level(LOG_MASK_DEVICE,LOG_LEVEL_LOW,"logo setup ge2d device OK\n");
-		plogo->dev->ge2d_context=context;
+		//double buffer,bottom part stretchblit to upper part.
+		op_info.src_rect.y+= plogo->dev->vinfo->height;
 	}
 	else if(strcmp(plogo->parser->name,"jpg")==0)
 	{// transfer from video layer to osd layer.
@@ -303,12 +290,14 @@ static  int  osd_transfer(logo_object_t *plogo)
 			ge2d_config.src_planes[1].h = canvas.height;
 			amlog_mask_level(LOG_MASK_DEVICE,LOG_LEVEL_LOW,"U:[0x%x][%d*%d]\n",(u32)canvas.addr,canvas.width,canvas.height);	
 			canvas_read(canvas_index>>16&0xff,&canvas);
-			if(canvas.addr==0) return FAIL;
+			if(canvas.addr==0) return FAIL;	
 			ge2d_config.src_planes[2].addr =  canvas.addr;
 			ge2d_config.src_planes[2].w = canvas.width;
 			ge2d_config.src_planes[2].h = canvas.height;
 			amlog_mask_level(LOG_MASK_DEVICE,LOG_LEVEL_LOW,"V:[0x%x][%d*%d]\n",(u32)canvas.addr,canvas.width,canvas.height);
-			context=dev_ge2d_setup(&ge2d_config);		
+			context=dev_ge2d_setup(&ge2d_config);
+
+			
 		}else{
 			amlog_mask_level(LOG_MASK_DEVICE,LOG_LEVEL_LOW,"can't transfer unsupported jpg format\n");	
 			return FAIL;
@@ -321,7 +310,6 @@ static  int  osd_transfer(logo_object_t *plogo)
 	amlog_mask_level(LOG_MASK_DEVICE,LOG_LEVEL_LOW,"blit==src:%d-%d-%d-%d\t",op_info.src_rect.x,op_info.src_rect.y,op_info.src_rect.w,op_info.src_rect.h);
 	amlog_mask_level(LOG_MASK_DEVICE,LOG_LEVEL_LOW,"dst:%d-%d-%d-%d\n",op_info.dst_rect.x,op_info.dst_rect.y,op_info.dst_rect.w,op_info.dst_rect.h);	
 	amlog_mask_level(LOG_MASK_DEVICE,LOG_LEVEL_LOW,"move logo pic completed\n");
-	
 	dev_ge2d_cmd(context,CMD_STRETCH_BLIT,&op_info);
 
 	if(plogo->para.progress) //need progress.

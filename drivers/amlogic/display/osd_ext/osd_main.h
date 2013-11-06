@@ -135,8 +135,9 @@ static struct fb_var_screeninfo mydef_var[] = {
 #endif
 };
 
+
 static struct fb_fix_screeninfo mydef_fix = {
-	.id		    = "OSD FB EXT",
+	.id		    = "OSD FB",
 	.xpanstep 	= 1,
 	.ypanstep 	= 1,
 	.type		= FB_TYPE_PACKED_PIXELS,
@@ -149,7 +150,7 @@ typedef struct {
 	int y ;
 	int w ;
 	int h ;
-}disp_rect_t;
+} disp_rect_t;
 
 #define DRIVER_NAME "osdfb2"
 #define MODULE_NAME "osdfb2"
@@ -172,5 +173,7 @@ typedef struct {
 #define FBIOPUT_OSD_BLOCK_MODE          0x450e
 #define FBIOGET_OSD_FREE_SCALE_AXIS     0x450f
 #define FBIOPUT_OSD_FREE_SCALE_AXIS     0x4510
+#define FBIOPUT_OSD_ENFORCE_PROGRESSIVE 0x4511
+#define FBIOPUT_OSD_CANVAS_CONF         0x4512
 
 #endif /* OSD_MAIN_H */

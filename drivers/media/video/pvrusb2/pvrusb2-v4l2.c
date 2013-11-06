@@ -49,7 +49,7 @@ struct pvr2_v4l2_dev {
 
 struct pvr2_v4l2_fh {
 	struct pvr2_channel channel;
-	struct pvr2_v4l2_dev *pdi;
+	struct pvr2_v4l2_dev *dev_info;
 	enum v4l2_priority prio;
 	struct pvr2_ioread *rhp;
 	struct file *file;
@@ -162,7 +162,7 @@ static long pvr2_v4l2_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 {
 	struct pvr2_v4l2_fh *fh = file->private_data;
 	struct pvr2_v4l2 *vp = fh->vhead;
-	struct pvr2_v4l2_dev *pdi = fh->pdi;
+	struct pvr2_v4l2_dev *dev_info = fh->dev_info;
 	struct pvr2_hdw *hdw = fh->channel.mc_head->hdw;
 	long ret = -EINVAL;
 
@@ -183,7 +183,7 @@ static long pvr2_v4l2_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 	case VIDIOC_S_INPUT:
 	case VIDIOC_S_TUNER:
 	case VIDIOC_S_FREQUENCY:
-		ret = v4l2_prio_check(&vp->prio, fh->prio);
+		ret = v4l2_prio_check(&vp->prio, &fh->prio);
 		if (ret)
 			return ret;
 	}
@@ -564,14 +564,14 @@ static long pvr2_v4l2_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 
 	case VIDIOC_STREAMON:
 	{
-		if (!fh->pdi->stream) {
+		if (!fh->dev_info->stream) {
 			/* No stream defined for this node.  This means
 			   that we're not currently allowed to stream from
 			   this node. */
 			ret = -EPERM;
 			break;
 		}
-		ret = pvr2_hdw_set_stream_type(hdw,pdi->config);
+		ret = pvr2_hdw_set_stream_type(hdw,dev_info->config);
 		if (ret < 0) return ret;
 		ret = pvr2_hdw_set_streaming(hdw,!0);
 		break;
@@ -579,7 +579,7 @@ static long pvr2_v4l2_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 
 	case VIDIOC_STREAMOFF:
 	{
-		if (!fh->pdi->stream) {
+		if (!fh->dev_info->stream) {
 			/* No stream defined for this node.  This means
 			   that we're not currently allowed to stream from
 			   this node. */
@@ -795,10 +795,12 @@ static long pvr2_v4l2_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 	case VIDIOC_S_CROP:
 	{
 		struct v4l2_crop *crop = (struct v4l2_crop *)arg;
+		struct v4l2_cropcap cap;
 		if (crop->type != V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 			ret = -EINVAL;
 			break;
 		}
+		cap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		ret = pvr2_ctrl_set_value(
 			pvr2_hdw_get_ctrl_by_id(hdw, PVR2_CID_CROPL),
 			crop->c.left);
@@ -850,8 +852,8 @@ static long pvr2_v4l2_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 #endif
 
 	default :
-		ret = -EINVAL;
-		break;
+		ret = v4l_compat_translate_ioctl(file, cmd,
+						 arg, pvr2_v4l2_do_ioctl);
 	}
 
 	pvr2_hdw_commit_ctl(hdw);
@@ -881,17 +883,6 @@ static void pvr2_v4l2_dev_destroy(struct pvr2_v4l2_dev *dip)
 {
 	struct pvr2_hdw *hdw = dip->v4lp->channel.mc_head->hdw;
 	enum pvr2_config cfg = dip->config;
-	char msg[80];
-	unsigned int mcnt;
-
-	/* Construct the unregistration message *before* we actually
-	   perform the unregistration step.  By doing it this way we don't
-	   have to worry about potentially touching deleted resources. */
-	mcnt = scnprintf(msg, sizeof(msg) - 1,
-			 "pvrusb2: unregistered device %s [%s]",
-			 video_device_node_name(&dip->devbase),
-			 pvr2_config_get_name(cfg));
-	msg[mcnt] = 0;
 
 	pvr2_hdw_v4l_store_minor_number(hdw,dip->minor_type,-1);
 
@@ -903,7 +894,9 @@ static void pvr2_v4l2_dev_destroy(struct pvr2_v4l2_dev *dip)
 	   are gone. */
 	video_unregister_device(&dip->devbase);
 
-	printk(KERN_INFO "%s\n", msg);
+	printk(KERN_INFO "pvrusb2: unregistered device %s [%s]\n",
+	       video_device_node_name(&dip->devbase),
+	       pvr2_config_get_name(cfg));
 
 }
 
@@ -979,7 +972,7 @@ static int pvr2_v4l2_release(struct file *file)
 		fhp->rhp = NULL;
 	}
 
-	v4l2_prio_close(&vp->prio, fhp->prio);
+	v4l2_prio_close(&vp->prio, &fhp->prio);
 	file->private_data = NULL;
 
 	if (fhp->vnext) {
@@ -1039,7 +1032,7 @@ static int pvr2_v4l2_open(struct file *file)
 	}
 
 	init_waitqueue_head(&fhp->wait_data);
-	fhp->pdi = dip;
+	fhp->dev_info = dip;
 
 	pvr2_trace(PVR2_TRACE_STRUCT,"Creating pvr_v4l2_fh id=%p",fhp);
 	pvr2_channel_init(&fhp->channel,vp->channel.mc_head);
@@ -1100,7 +1093,7 @@ static int pvr2_v4l2_open(struct file *file)
 
 	fhp->file = file;
 	file->private_data = fhp;
-	v4l2_prio_open(&vp->prio, &fhp->prio);
+	v4l2_prio_open(&vp->prio,&fhp->prio);
 
 	fhp->fw_mode_flag = pvr2_hdw_cpufw_get_enabled(hdw);
 
@@ -1120,7 +1113,7 @@ static int pvr2_v4l2_iosetup(struct pvr2_v4l2_fh *fh)
 	struct pvr2_hdw *hdw;
 	if (fh->rhp) return 0;
 
-	if (!fh->pdi->stream) {
+	if (!fh->dev_info->stream) {
 		/* No stream defined for this node.  This means that we're
 		   not currently allowed to stream from this node. */
 		return -EPERM;
@@ -1129,21 +1122,21 @@ static int pvr2_v4l2_iosetup(struct pvr2_v4l2_fh *fh)
 	/* First read() attempt.  Try to claim the stream and start
 	   it... */
 	if ((ret = pvr2_channel_claim_stream(&fh->channel,
-					     fh->pdi->stream)) != 0) {
+					     fh->dev_info->stream)) != 0) {
 		/* Someone else must already have it */
 		return ret;
 	}
 
-	fh->rhp = pvr2_channel_create_mpeg_stream(fh->pdi->stream);
+	fh->rhp = pvr2_channel_create_mpeg_stream(fh->dev_info->stream);
 	if (!fh->rhp) {
 		pvr2_channel_claim_stream(&fh->channel,NULL);
 		return -ENOMEM;
 	}
 
 	hdw = fh->channel.mc_head->hdw;
-	sp = fh->pdi->stream->stream;
+	sp = fh->dev_info->stream->stream;
 	pvr2_stream_set_callback(sp,(pvr2_stream_callback)pvr2_v4l2_notify,fh);
-	pvr2_hdw_set_stream_type(hdw,fh->pdi->config);
+	pvr2_hdw_set_stream_type(hdw,fh->dev_info->config);
 	if ((ret = pvr2_hdw_set_streaming(hdw,!0)) < 0) return ret;
 	return pvr2_ioread_set_enabled(fh->rhp,!0);
 }

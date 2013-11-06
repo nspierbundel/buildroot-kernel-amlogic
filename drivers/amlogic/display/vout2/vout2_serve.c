@@ -44,11 +44,10 @@
 #include "tvmode.h"
 #include "vout_log.h"
 #include <linux/amlog.h>
-#include <plat/io.h>
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
-//static struct early_suspend early_suspend;
-//static int early_suspend_flag = 0;
+static struct early_suspend early_suspend;
+static int early_suspend_flag = 0;
 #endif
 
 MODULE_AMLOG(0, 0xff, LOG_LEVEL_DESC, LOG_MASK_DESC);
@@ -103,12 +102,12 @@ static   int* parse_para(char *para,char   *para_num)
 }
 
 
-#if 0	
+	
 #ifdef  CONFIG_PM
 static int  meson_vout_suspend(struct platform_device *pdev, pm_message_t state);
 static int  meson_vout_resume(struct platform_device *pdev);
 #endif
-#endif
+
 static  void  set_vout_mode(char * name)
 {
 	vmode_t    mode;
@@ -171,8 +170,7 @@ static void  set_vout_window(char *para)
 static const char *venc_mux_help = {
 	"venc_mux:\n"
 	"    0. single display, viu1->panel, viu2->null\n"
-	"    2. dual display, viu1->hdmi, viu2->panel\n"
-	"    8. dual display, viu1->panel, viu2->hdmi\n"
+	"    2. dual display, viu1->hdmi, viu1->panel\n"
 };
 
 static ssize_t venc_mux_show(struct class *class, struct class_attribute *attr, char *buf)
@@ -182,29 +180,22 @@ static ssize_t venc_mux_show(struct class *class, struct class_attribute *attr, 
 
 static ssize_t venc_mux_store(struct class *class, struct class_attribute *attr, const char *buf, size_t count)
 {
-	unsigned int mux_type = 0;
 	unsigned int mux = 0;
 
 	mux = simple_strtoul(buf, NULL, 0);
+	printk("set venc_mux: %d->%d\n", s_venc_mux, mux);
 	switch (mux) {
 	case 0x0:
-		mux_type = s_venc_mux;
-		aml_set_reg32_bits(P_VPU_VIU_VENC_MUX_CTRL, mux_type, 0, 4);
-		break;
 	case 0x2:
-		mux_type = mux |(s_venc_mux<<2);
-		aml_set_reg32_bits(P_VPU_VIU_VENC_MUX_CTRL, mux_type, 0, 4);
-		break;
 	case 0x8:
-		mux_type = (0x2<<2) |s_venc_mux;
-		aml_set_reg32_bits(P_VPU_VIU_VENC_MUX_CTRL, mux_type, 0, 4);
+	case 0xa:
+		s_venc_mux = mux;
+		mux = WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, mux, 0, 4);
 		break;
 	default:
 		printk("set venc_mux error\n");
-		break;
 	}
 
-	printk("set venc_mux mux_type is %d\n", mux_type);
 	return count;
 }
 
@@ -239,7 +230,7 @@ static int  create_vout_attr(void)
 
 	return   0;
 }
-#if 0
+
 #ifdef  CONFIG_PM
 static int  meson_vout_suspend(struct platform_device *pdev, pm_message_t state)
 {	
@@ -261,7 +252,7 @@ static int  meson_vout_resume(struct platform_device *pdev)
 	return 0;
 }
 #endif 
-#endif
+
 #if 0 //def CONFIG_HAS_EARLYSUSPEND
 static void meson_vout_early_suspend(struct early_suspend *h)
 {
@@ -301,8 +292,6 @@ static int __init
 #endif
 
 	ret =create_vout_attr();
-	s_venc_mux = aml_read_reg32(P_VPU_VIU_VENC_MUX_CTRL) & 0x3;
-
 	if(ret==0)
 	{
 		amlog_mask_level(LOG_MASK_INIT,LOG_LEVEL_HIGH,"create  vout2 attribute ok \r\n");

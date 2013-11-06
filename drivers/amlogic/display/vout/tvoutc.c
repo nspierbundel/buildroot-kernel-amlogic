@@ -31,19 +31,13 @@
 #include <linux/vout/vinfo.h>
 #include "tvoutc.h"
 #include <linux/clk.h>
-#include <plat/io.h>
-#include <mach/tvregs.h>
-#include <mach/mod_gate.h>
 #include <linux/vout/enc_clk_config.h>
 
-#ifndef CONFIG_ARCH_MESON6
-#include <plat/io.h>
-#include <mach/cpu.h>
-#endif
 
 static u32 curr_vdac_setting=DEFAULT_VDAC_SEQUENCE;
+#include "tvregs.h"
 
-#define  SET_VDAC(index,val)   (aml_write_reg32(CBUS_REG_ADDR(index+VENC_VDAC_DACSEL0),val))
+#define  SET_VDAC(index,val)   (WRITE_MPEG_REG((index+VENC_VDAC_DACSEL0),val))
 static const unsigned int  signal_set[SIGNAL_SET_MAX][3]=
 {
 	{	VIDEO_SIGNAL_TYPE_INTERLACE_Y,     // component interlace
@@ -59,12 +53,6 @@ static const unsigned int  signal_set[SIGNAL_SET_MAX][3]=
 		VIDEO_SIGNAL_TYPE_PROGRESSIVE_PB,
 		VIDEO_SIGNAL_TYPE_PROGRESSIVE_PR,
 	},
-	{
-	    VIDEO_SIGNAL_TYPE_PROGEESSIVE_B,     //Analog RGB for VGA.
-		VIDEO_SIGNAL_TYPE_PROGEESSIVE_G,
-		VIDEO_SIGNAL_TYPE_PROGEESSIVE_R,
-	},
-
 };
 static  const  char*   signal_table[]={
 	"INTERLACE_Y ", /**< Interlace Y signal */
@@ -108,12 +96,6 @@ void  change_vdac_setting(unsigned int  vdec_setting,vmode_t  mode)
 		signal_set_index=1;	
 		bit=2;
 		break;
-		case VMODE_SVGA:
-		case VMODE_XGA:
-		case VMODE_VGA:
-		signal_set_index=3;
-		bit=5;
-		break;
 		default :
 		signal_set_index=2;
 		bit=5;
@@ -139,7 +121,7 @@ static void enable_vsync_interrupt(void)
     if (READ_MPEG_REG(ENCP_VIDEO_EN) & 1) {
         WRITE_MPEG_REG(VENC_INTCTRL, 0x200);
 
-#ifdef CONFIG_ARCH_MESON1
+#if 0
         while ((READ_MPEG_REG(VENC_INTFLAG) & 0x200) == 0) {
             u32 line1, line2;
 
@@ -242,7 +224,7 @@ int tvoutc_setclk(tvmode_t mode)
 			printk(KERN_ERR "unsupport tv mode,video clk is not set!!\n");	
 	}
 
-	return 0 ;
+	return 0;
 }
 
 static void set_tvmode_misc(tvmode_t mode)
@@ -259,25 +241,16 @@ int tvoutc_setmode(tvmode_t mode)
         return -ENODEV;
     }
 
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6   
-    switch_mod_gate_by_name("venc", 1);
-#endif
-
     printk(KERN_DEBUG "TV mode %s selected.\n", tvinfoTab[mode].id);
    
     s = tvregsTab[mode];
 			
     while (MREG_END_MARKER != s->reg)
         setreg(s++);
-    printk("%s[%d]\n", __func__, __LINE__);
-   // if (mode < TVMODE_VGA)
+	//tvoutc_setclk(mode);
+    //enable_vsync_interrupt();
     set_tvmode_misc(mode);
-#ifdef CONFIG_ARCH_MESON1
-	tvoutc_setclk(mode);
-    printk("%s[%d]\n", __func__, __LINE__);
-    enable_vsync_interrupt();
-#endif
-#ifdef CONFIG_AM_TV_OUTPUT2
+#ifdef CONFIG_AM_VIDEO2
 	switch(mode)
 	{
 		case TVMODE_480I:
@@ -285,8 +258,6 @@ int tvoutc_setmode(tvmode_t mode)
 		case TVMODE_576I:
 		case TVMODE_576CVBS:
         WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 1, 0, 2); //reg0x271a, select ENCI to VIU1
-        WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 1, 4, 4); //reg0x271a, Select encI clock to VDIN            
-        WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 1, 8, 4); //reg0x271a,Enable VIU of ENC_I domain to VDIN;
 			  break;
 		case TVMODE_480P:
 		case TVMODE_576P:
@@ -296,10 +267,7 @@ int tvoutc_setmode(tvmode_t mode)
 		case TVMODE_1080I_50HZ: //??
 		case TVMODE_1080P:
 		case TVMODE_1080P_50HZ:
-		case TVMODE_1080P_24HZ:
         WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 2, 0, 2); //reg0x271a, select ENCP to VIU1
-        WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 2, 4, 4); //reg0x271a, Select encP clock to VDIN            
-        WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 2, 8, 4); //reg0x271a,Enable VIU of ENC_P domain to VDIN;
         break;		    
 		default:
 			printk(KERN_ERR "unsupport tv mode,video clk is not set!!\n");	
@@ -308,7 +276,12 @@ int tvoutc_setmode(tvmode_t mode)
     
     WRITE_MPEG_REG(VPP_POSTBLEND_H_SIZE, tvinfoTab[mode].xres);
 
-#ifdef CONFIG_ARCH_MESON3
+#ifdef CONFIG_MACH_MESON3_REFF16_DONGLE
+	/*disable  YUV*/
+	WRITE_MPEG_REG(VENC_VDAC_SETTING, 0x07);
+#endif   
+// For debug only
+#if 0
 printk(" clk_util_clk_msr 6 = %d\n", clk_util_clk_msr(6));
 printk(" clk_util_clk_msr 7 = %d\n", clk_util_clk_msr(7));
 printk(" clk_util_clk_msr 8 = %d\n", clk_util_clk_msr(8));
@@ -317,10 +290,10 @@ printk(" clk_util_clk_msr 10 = %d\n", clk_util_clk_msr(10));
 printk(" clk_util_clk_msr 27 = %d\n", clk_util_clk_msr(27));
 printk(" clk_util_clk_msr 29 = %d\n", clk_util_clk_msr(29));
 #endif
-
 //while(1);
 
 
     return 0;
 }
+
 

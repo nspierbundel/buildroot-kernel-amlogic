@@ -2,23 +2,17 @@
 # Post Process Manager device configuration
 #
 
-menu "Amlogic Post Process Manager driver"
+menu "AMLOGIC Post Process Manager driver"
 
 config POST_PROCESS_MANAGER
-    tristate "Amlogic Post Process Manager driver"
+    tristate "AMLOGIC Post Process Manager driver"
     default n
 	help
-	  Select to enable Amlogic Post Process Manager driver.
+	  Select to enable AMLOGIC Post Process Manager driver.
 config POST_PROCESS_MANAGER_PPSCALER
-    tristate "Amlogic Post Process Manager PPScaler mode"
+    tristate "AMLOGIC Post Process Manager PPScaler mode"
     depends on  POST_PROCESS_MANAGER
     default n
 	help
-	  Select to include PPscaler function in Amlogic Post Process Manager driver.
-config POST_PROCESS_MANAGER_3D_PROCESS
-    tristate "Amlogic Post Process Manager 3D Process"
-    depends on  POST_PROCESS_MANAGER
-    default n
-	help
-	  Select to include 3D Process function in Amlogic Post Process Manager driver.
+	  Select to include PPscaler function in AMLOGIC Post Process Manager driver.
 endmenu

@@ -213,7 +213,7 @@ static const struct file_operations am_tv_fops = {
 	.open	= NULL,  
 	.read	= NULL,//am_tv_read, 
 	.write	= NULL, 
-	.unlocked_ioctl	= NULL,//am_tv_ioctl, 
+	.ioctl	= NULL,//am_tv_ioctl, 
 	.release	= NULL, 	
 	.poll		= NULL,
 };

@@ -40,14 +40,7 @@ typedef enum {
     VMODE_720P_50HZ ,
     VMODE_1080I_50HZ ,
     VMODE_1080P_50HZ ,
-    VMODE_1080P_24HZ ,
-    VMODE_VGA,
-    VMODE_SVGA,
-    VMODE_XGA,
-    VMODE_SXGA,
     VMODE_LCD	,
-	VMODE_LVDS_1080P,
-	VMODE_LVDS_1080P_50HZ,
     VMODE_MAX,
     VMODE_INIT_NULL,
     VMODE_MASK = 0xFF,
@@ -58,13 +51,13 @@ typedef struct {
 	vmode_t		mode;
 	u32			width;
 	u32			height;
+       u32                screen_real_width;
+       u32                screen_real_height;
 	u32			field_height;
 	u32			aspect_ratio_num;
 	u32			aspect_ratio_den;
 	u32			sync_duration_num;
 	u32			sync_duration_den;
-	u32                screen_real_width;
-        u32                screen_real_height;
 } vinfo_t;
 
 #endif /* TVMODE_H */

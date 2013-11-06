@@ -33,7 +33,6 @@ typedef  enum{
 	INTERALCE_COMPONENT=0,
 	CVBS_SVIDEO,
 	PROGRESSIVE,
-	VGA_SVIDEO,
 	SIGNAL_SET_MAX
 }video_signal_set_t;
 typedef enum {

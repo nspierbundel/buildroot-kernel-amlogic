@@ -10,9 +10,7 @@
  *******************************************************************/
 #include <linux/ge2d/ge2d_main.h>
 #include "ge2d_log.h"
-#include "ge2d_dev.h"
 #include <linux/amlog.h>
-#include <mach/mod_gate.h>
 
 MODULE_AMLOG(AMLOG_DEFAULT_LEVEL, 0x00, LOG_LEVEL_DESC, LOG_MASK_DESC);
 
@@ -23,7 +21,7 @@ MODULE_AMLOG(AMLOG_DEFAULT_LEVEL, 0x00, LOG_LEVEL_DESC, LOG_MASK_DESC);
 ************************************************************************/
 static  bool   command_valid(unsigned int cmd)
 {
-    return (cmd <= GE2D_STRETCHBLIT_NOALPHA_NOBLOCK && cmd >= GE2D_ANTIFLICKER_ENABLE );
+    return (cmd <= GE2D_BLIT_WITHOUTKEY_NOBLOCK && cmd >= GE2D_BLIT_WITHOUTKEY );
 }
 static int 
 ge2d_open(struct inode *inode, struct file *file) 
@@ -31,8 +29,6 @@ ge2d_open(struct inode *inode, struct file *file)
 	 ge2d_context_t *context;
 	 //we create one ge2d workqueue for this file handler.
 	 
-         if (ge2d_device.open_count == 0)
-                switch_mod_gate_by_name("ge2d", 1);
 	 if(NULL==(context=create_ge2d_work_queue()))
 	 {
 	 	amlog_level(LOG_LEVEL_HIGH,"can't create work queue \r\n");
@@ -43,8 +39,9 @@ ge2d_open(struct inode *inode, struct file *file)
 	 ge2d_device.open_count++;
 	 return 0;
 }
-static long
-ge2d_ioctl(struct file *filp,unsigned int cmd, unsigned long args)
+static int
+ge2d_ioctl(struct inode *inode, struct file *filp,
+                 unsigned int cmd, unsigned long args)
 {
 
 	ge2d_context_t *context=(ge2d_context_t *)filp->private_data;
@@ -59,16 +56,16 @@ ge2d_ioctl(struct file *filp,unsigned int cmd, unsigned long args)
    	{
 		case  GE2D_CONFIG:
 		case  GE2D_SRCCOLORKEY:	
-		ret=copy_from_user(&ge2d_config,argp,sizeof(config_para_t));
+		copy_from_user(&ge2d_config,argp,sizeof(config_para_t));
 		break;
 		case  GE2D_CONFIG_EX:
-		ret=copy_from_user(&ge2d_config_ex,argp,sizeof(config_para_ex_t));
+		copy_from_user(&ge2d_config_ex,argp,sizeof(config_para_ex_t));
 		break;
 		case  GE2D_SET_COEF:
 		case  GE2D_ANTIFLICKER_ENABLE:	
 		break;
 		default :
-		ret=copy_from_user(&para,argp,sizeof(ge2d_para_t));	
+		copy_from_user(&para,argp,sizeof(ge2d_para_t));	
 		break;
 		
    	}
@@ -173,6 +170,20 @@ ge2d_ioctl(struct file *filp,unsigned int cmd, unsigned long args)
            		para.dst_rect.w, para.dst_rect.h,
            		para.op) ;	
 		break;
+		case	 GE2D_BLIT_WITHOUTKEY:
+		amlog_mask_level(LOG_MASK_IOCTL,LOG_LEVEL_LOW,"blit_withoutkey...\r\n");
+            	bitblt_withoutkey(context ,
+                   para.src1_rect.x, para.src1_rect.y,
+                   para.src1_rect.w, para.src1_rect.h,
+                   para.dst_rect.x, para.dst_rect.y);		
+		break;
+		case	 GE2D_BLIT_WITHOUTKEY_NOBLOCK:
+		amlog_mask_level(LOG_MASK_IOCTL,LOG_LEVEL_LOW,"blit_withoutkey_noblk...\r\n");
+            	bitblt_withoutkey_noblk(context ,
+                   para.src1_rect.x, para.src1_rect.y,
+                   para.src1_rect.w, para.src1_rect.h,
+                   para.dst_rect.x, para.dst_rect.y);		
+		break;	
 		case GE2D_BLIT_NOALPHA:
 		//bitblt_noalpha
             	amlog_mask_level(LOG_MASK_IOCTL,LOG_LEVEL_LOW,"blit_noalpha...\r\n");
@@ -222,8 +233,6 @@ ge2d_release(struct inode *inode, struct file *file)
 	if(context && (0==destroy_ge2d_work_queue(context)))
 	{
 		ge2d_device.open_count--;
-		if (ge2d_device.open_count == 0)
-			switch_mod_gate_by_name("ge2d", 0);
 		return 0;
 	}
 	amlog_level(LOG_LEVEL_LOW,"release one ge2d device\n");

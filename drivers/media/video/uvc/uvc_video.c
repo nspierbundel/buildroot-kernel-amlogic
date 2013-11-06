@@ -16,6 +16,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/usb.h>
+#include <linux/uvcvideo.h>
 #include <linux/videodev2.h>
 #include <linux/vmalloc.h>
 #include <linux/wait.h>
@@ -23,8 +24,6 @@
 #include <asm/unaligned.h>
 
 #include <media/v4l2-common.h>
-
-#include "uvcvideo.h"
 
 /* ------------------------------------------------------------------------
  * UVC Controls
@@ -394,11 +393,11 @@ int uvc_commit_video(struct uvc_streaming *stream,
  *
  * uvc_video_decode_end is called with header data at the end of a bulk or
  * isochronous payload. It performs any additional header data processing and
- * returns 0 or a negative error code if an error occurred. As header data have
+ * returns 0 or a negative error code if an error occured. As header data have
  * already been processed by uvc_video_decode_start, this functions isn't
  * required to perform sanity checks a second time.
  *
- * For isochronous transfers where a payload is always transferred in a single
+ * For isochronous transfers where a payload is always transfered in a single
  * URB, the three functions will be called in a row.
  *
  * To let the decoder process header data and update its internal state even
@@ -509,13 +508,8 @@ static void uvc_video_decode_data(struct uvc_streaming *stream,
 	unsigned int maxlen, nbytes;
 	void *mem;
 
-	if (len <= 0){
-		if(buf->buf.length - buf->buf.bytesused){
-			buf->error = 1;
-			buf->state = UVC_BUF_STATE_READY;
-		}
+	if (len <= 0)
 		return;
-	}
 
 	/* Copy the video data to the buffer. */
 	maxlen = buf->buf.length - buf->buf.bytesused;
@@ -526,7 +520,7 @@ static void uvc_video_decode_data(struct uvc_streaming *stream,
 
 	/* Complete the current frame if the buffer size was exceeded. */
 	if (len > maxlen) {
-		printk(KERN_DEBUG "Frame complete (overflow).\n");
+		uvc_trace(UVC_TRACE_FRAME, "Frame complete (overflow).\n");
 		buf->state = UVC_BUF_STATE_READY;
 	}
 }
@@ -645,7 +639,8 @@ static void uvc_video_decode_bulk(struct urb *urb, struct uvc_streaming *stream,
 	u8 *mem;
 	int len, ret;
 
-	if (urb->actual_length == 0)
+	/* do not process ZLP if not part of a frame */
+	if ((urb->actual_length == 0) && (stream->bulk.header_size == 0))
 		return;
 
 	mem = urb->transfer_buffer;
@@ -663,7 +658,7 @@ static void uvc_video_decode_bulk(struct urb *urb, struct uvc_streaming *stream,
 							    buf);
 		} while (ret == -EAGAIN);
 
-		/* If an error occurred skip the rest of the payload. */
+		/* If an error occured skip the rest of the payload. */
 		if (ret < 0 || buf == NULL) {
 			stream->bulk.skip_payload = 1;
 		} else {
@@ -746,7 +741,11 @@ static void uvc_video_encode_bulk(struct urb *urb, struct uvc_streaming *stream,
 	urb->transfer_buffer_length = stream->urb_size - len;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+static void uvc_video_complete(struct urb *urb, struct pt_regs *regs)
+#else
 static void uvc_video_complete(struct urb *urb)
+#endif
 {
 	struct uvc_streaming *stream = urb->context;
 	struct uvc_video_queue *queue = &stream->queue;
@@ -826,7 +825,7 @@ static int uvc_alloc_urb_buffers(struct uvc_streaming *stream,
 		return stream->urb_size / psize;
 
 	/* Compute the number of packets. Bulk endpoints might transfer UVC
-	 * payloads across multiple URBs.
+	 * payloads accross multiple URBs.
 	 */
 	npackets = DIV_ROUND_UP(size, psize);
 	if (npackets > UVC_MAX_PACKETS)
@@ -1109,17 +1108,9 @@ int uvc_video_suspend(struct uvc_streaming *stream)
  * buffers, making sure userspace applications are notified of the problem
  * instead of waiting forever.
  */
-int uvc_video_resume(struct uvc_streaming *stream, int reset)
+int uvc_video_resume(struct uvc_streaming *stream)
 {
 	int ret;
-
-	/* If the bus has been reset on resume, set the alternate setting to 0.
-	 * This should be the default value, but some devices crash or otherwise
-	 * misbehave if they don't receive a SET_INTERFACE request before any
-	 * other video control request.
-	 */
-	if (reset)
-		usb_set_interface(stream->dev->udev, stream->intfnum, 0);
 
 	stream->frozen = 0;
 
@@ -1268,10 +1259,8 @@ int uvc_video_enable(struct uvc_streaming *stream, int enable)
 
 	/* Commit the streaming parameters. */
 	ret = uvc_commit_video(stream, &stream->ctrl);
-	if (ret < 0) {
-		uvc_queue_enable(&stream->queue, 0);
+	if (ret < 0)
 		return ret;
-	}
 
 	return uvc_init_video(stream, GFP_KERNEL);
 }

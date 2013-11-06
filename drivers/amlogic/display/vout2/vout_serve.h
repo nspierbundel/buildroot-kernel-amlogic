@@ -71,10 +71,8 @@ __ATTR(name, S_IRUGO|S_IWUSR, aml_vout_attr_##name##_show, aml_vout_attr_##name#
 **	function  declare  part 
 **
 ******************************************************************/
-#if 0
 static  void  read_reg(char *para);
 static  void  write_reg(char *para);
-#endif
 static  void  set_vout_mode(char *mode) ;
 static void  set_vout_window(char *para) ;
 static  void   func_default_null(char  *str);

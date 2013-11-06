@@ -24,6 +24,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/init.h>
@@ -36,6 +37,7 @@
 #include <linux/string.h>
 #include <linux/types.h>
 #include <linux/firmware.h>
+#include <linux/smp_lock.h>
 
 #include "vendorcmds.h"
 #include "pd-common.h"
@@ -53,8 +55,8 @@ int debug_mode;
 module_param(debug_mode, int, 0644);
 MODULE_PARM_DESC(debug_mode, "0 = disable, 1 = enable, 2 = verbose");
 
-static const char *firmware_name = "tlg2300_firmware.bin";
-static struct usb_driver poseidon_driver;
+const char *firmware_name = "tlg2300_firmware.bin";
+struct usb_driver poseidon_driver;
 static LIST_HEAD(pd_device_list);
 
 /*
@@ -226,11 +228,12 @@ static int firmware_download(struct usb_device *udev)
 
 	fwlength = fw->size;
 
-	fwbuf = kmemdup(fw->data, fwlength, GFP_KERNEL);
+	fwbuf = kzalloc(fwlength, GFP_KERNEL);
 	if (!fwbuf) {
 		ret = -ENOMEM;
 		goto out;
 	}
+	memcpy(fwbuf, fw->data, fwlength);
 
 	max_packet_size = udev->ep_out[0x1]->desc.wMaxPacketSize;
 	log("\t\t download size : %d", (int)max_packet_size);
@@ -452,9 +455,8 @@ static int poseidon_probe(struct usb_interface *interface,
 
 	device_init_wakeup(&udev->dev, 1);
 #ifdef CONFIG_PM
-	pm_runtime_set_autosuspend_delay(&pd->udev->dev,
-			1000 * PM_SUSPEND_DELAY);
-	usb_enable_autosuspend(pd->udev);
+	pd->udev->autosuspend_disabled = 0;
+	pd->udev->autosuspend_delay = HZ * PM_SUSPEND_DELAY;
 
 	if (in_hibernation(pd)) {
 		INIT_WORK(&pd->pm_work, hibernation_resume);
@@ -485,17 +487,21 @@ static void poseidon_disconnect(struct usb_interface *interface)
 	/*unregister v4l2 device */
 	v4l2_device_unregister(&pd->v4l2_dev);
 
-	pd_dvb_usb_device_exit(pd);
-	poseidon_fm_exit(pd);
+	lock_kernel();
+	{
+		pd_dvb_usb_device_exit(pd);
+		poseidon_fm_exit(pd);
 
-	poseidon_audio_free(pd);
-	pd_video_exit(pd);
+		poseidon_audio_free(pd);
+		pd_video_exit(pd);
+	}
+	unlock_kernel();
 
 	usb_set_intfdata(interface, NULL);
 	kref_put(&pd->kref, poseidon_delete);
 }
 
-static struct usb_driver poseidon_driver = {
+struct usb_driver poseidon_driver = {
 	.name		= "poseidon",
 	.probe		= poseidon_probe,
 	.disconnect	= poseidon_disconnect,

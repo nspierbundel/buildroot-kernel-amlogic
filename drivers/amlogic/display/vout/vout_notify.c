@@ -12,8 +12,6 @@
 #include <linux/module.h>
 #include <linux/vout/vout_notify.h>
 #include <linux/delay.h>
-#include <linux/sched.h>
-
 
 static BLOCKING_NOTIFIER_HEAD(vout_notifier_list);
 static  DEFINE_MUTEX(vout_mutex)  ;
@@ -93,7 +91,6 @@ vmode_t get_current_vmode(void)
 EXPORT_SYMBOL(get_current_vmode);
 #ifdef CONFIG_SCREEN_ON_EARLY
 static int wake_up_flag;
-static int not_suspend_flag;
 void wakeup_early_suspend_proc(void)
 {
 	wake_up_flag = 1;
@@ -101,23 +98,22 @@ void wakeup_early_suspend_proc(void)
 #endif
 int vout_suspend(void)
 {
-#ifdef CONFIG_SCREEN_ON_EARLY
-    int i = 0;
-#endif
 	int ret=0 ;
 	vout_server_t  *p_server = vout_module.curr_vout_server;
 
 #ifdef CONFIG_SCREEN_ON_EARLY
+extern void power_off_backlight(void);
+	power_off_backlight();
+	int i = 0;
 	wake_up_flag = 0;
-	for(; i < 20; i++)
+	for(; i < 10; i++)
 		if (wake_up_flag) {
-			wake_up_flag = 0;
-			not_suspend_flag = 1;
-			return 0;
+			break;
 		} else
 			msleep(100);
 	wake_up_flag = 0;
 #endif
+
 	mutex_lock(&vout_mutex);
 	if (p_server)
 	{
@@ -126,6 +122,7 @@ int vout_suspend(void)
 			ret = p_server->op.vout_suspend() ;
 		}
 	}
+	
 	mutex_unlock(&vout_mutex);
 	return ret;
 }
@@ -133,13 +130,6 @@ EXPORT_SYMBOL(vout_suspend);
 int vout_resume(void)
 {
 	vout_server_t  *p_server = vout_module.curr_vout_server;
-
-#ifdef CONFIG_SCREEN_ON_EARLY
-	if (not_suspend_flag) {
-		not_suspend_flag = 0;
-		return 0;
-	}
-#endif
 
 	mutex_lock(&vout_mutex);
 	if (p_server)
@@ -221,8 +211,6 @@ int vout_register_server(vout_server_t*  mem_server)
 	vout_server_t  *p_server;
 
 	BUG_ON(mem_server == NULL);
-    printk("%s\n", __func__);
-
 	mutex_lock(&vout_mutex);
 	list_for_each(p_iter,&vout_module.vout_server_list )
 	{

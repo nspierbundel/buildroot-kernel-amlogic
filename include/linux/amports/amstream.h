@@ -22,7 +22,7 @@
 #ifndef AMSTREAM_H
 #define AMSTREAM_H
 
-//#include <linux/interrupt.h>
+#include <linux/interrupt.h>
 #include "ve.h"
 
 #ifdef __KERNEL__
@@ -33,8 +33,7 @@
 #define PORT_FLAG_VID       0x0008
 #define PORT_FLAG_AID       0x0010
 #define PORT_FLAG_SID       0x0020
-#define PORT_FLAG_UD       0x0040
-#define PORT_FLAG_ID        (PORT_FLAG_VID | PORT_FLAG_AID | PORT_FLAG_SID | PORT_FLAG_UD)
+#define PORT_FLAG_ID        (PORT_FLAG_VID | PORT_FLAG_AID | PORT_FLAG_SID)
 #define PORT_FLAG_INITED    0x100
 
 #define PORT_TYPE_VIDEO     0x01
@@ -45,7 +44,6 @@
 #define PORT_TYPE_RM        0x20
 #define PORT_TYPE_SUB       0x40
 #define PORT_TYPE_SUB_RD    0x80
-#define PORT_TYPE_USERDATA	0x200
 #endif
 
 #define AMSTREAM_IOC_MAGIC  'S'
@@ -123,22 +121,12 @@
 #define AMSTREAM_IOC_SUB_INFO	_IOR(AMSTREAM_IOC_MAGIC, 0x51, unsigned long)
 #define AMSTREAM_IOC_GET_BLACKOUT_POLICY   _IOR(AMSTREAM_IOC_MAGIC, 0x52, unsigned long)
 #define AMSTREAM_IOC_SET_BLACKOUT_POLICY   _IOW(AMSTREAM_IOC_MAGIC, 0x53, unsigned long)
-#define AMSTREAM_IOC_GET_SCREEN_MODE _IOR(AMSTREAM_IOC_MAGIC, 0x58, int)
-#define AMSTREAM_IOC_SET_SCREEN_MODE _IOW(AMSTREAM_IOC_MAGIC, 0x59, int)
-#define AMSTREAM_IOC_GET_VIDEO_DISCONTINUE_REPORT _IOR(AMSTREAM_IOC_MAGIC, 0x5a, int)
-#define AMSTREAM_IOC_SET_VIDEO_DISCONTINUE_REPORT _IOW(AMSTREAM_IOC_MAGIC, 0x5b, int)
 #define AMSTREAM_IOC_VF_STATUS  _IOR(AMSTREAM_IOC_MAGIC, 0x60, unsigned long)
 #define AMSTREAM_IOC_CLEAR_VBUF _IO(AMSTREAM_IOC_MAGIC, 0x80)
 
 #define AMSTREAM_IOC_APTS_LOOKUP    _IOR(AMSTREAM_IOC_MAGIC, 0x81, unsigned long)
 #define GET_FIRST_APTS_FLAG    _IOR(AMSTREAM_IOC_MAGIC, 0x82, long)
 
-#define AMSTREAM_IOC_GET_SYNC_ADISCON_DIFF  _IOR(AMSTREAM_IOC_MAGIC, 0x83, unsigned long)
-#define AMSTREAM_IOC_GET_SYNC_VDISCON_DIFF  _IOR(AMSTREAM_IOC_MAGIC, 0x84, unsigned long)
-#define AMSTREAM_IOC_SET_SYNC_ADISCON_DIFF  _IOW(AMSTREAM_IOC_MAGIC, 0x85, unsigned long)
-#define AMSTREAM_IOC_SET_SYNC_VDISCON_DIFF  _IOW(AMSTREAM_IOC_MAGIC, 0x86, unsigned long)
-#define AMSTREAM_IOC_GET_FREERUN_MODE  _IOR(AMSTREAM_IOC_MAGIC, 0x87, unsigned long)
-#define AMSTREAM_IOC_SET_FREERUN_MODE  _IOW(AMSTREAM_IOC_MAGIC, 0x88, unsigned long)
 #define AMSTREAM_IOC_SET_DEMUX  _IOW(AMSTREAM_IOC_MAGIC, 0x90, unsigned long)
 
 #define TRICKMODE_NONE       0x00
@@ -262,7 +250,7 @@ struct tsdemux_ops {
     int (*set_aid)(int apid);
     int (*set_sid)(int spid);
     int (*set_skipbyte)(int skipbyte);
-    int (*set_demux)(int dev);	
+    int (*set_demux)(int dev);
 };
 
 void tsdemux_set_ops(struct tsdemux_ops *ops);
@@ -273,26 +261,8 @@ void set_vdec_func(int (*vdec_func)(struct vdec_status *));
 void set_adec_func(int (*adec_func)(struct adec_status *));
 void set_trickmode_func(int (*trickmode_func)(unsigned long trickmode));
 void wakeup_sub_poll(void);
-int wakeup_userdata_poll(int wp, int start_phyaddr, int buf_size);
 int get_sub_type(void);
 #endif
-
-typedef struct tcon_gamma_table_s {
-    u16 data[256];
-} tcon_gamma_table_t;
-
-typedef struct tcon_rgb_ogo_s {
-    unsigned int en;
-             int r_pre_offset;  // s11.0, range -1024~+1023, default is 0
-             int g_pre_offset;  // s11.0, range -1024~+1023, default is 0
-             int b_pre_offset;  // s11.0, range -1024~+1023, default is 0
-    unsigned int r_gain;        // u1.10, range 0~2047, default is 1024 (1.0x)
-    unsigned int g_gain;        // u1.10, range 0~2047, default is 1024 (1.0x)
-    unsigned int b_gain;        // u1.10, range 0~2047, default is 1024 (1.0x)
-             int r_post_offset; // s11.0, range -1024~+1023, default is 0
-             int g_post_offset; // s11.0, range -1024~+1023, default is 0
-             int b_post_offset; // s11.0, range -1024~+1023, default is 0
-} tcon_rgb_ogo_t;
 
 #endif /* AMSTREAM_H */
 

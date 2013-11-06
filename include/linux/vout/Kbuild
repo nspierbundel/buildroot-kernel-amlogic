@@ -1,1 +1,1 @@
-unifdef-y += lcdoutc.h
+unifdef-y += tcon.h

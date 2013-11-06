@@ -21,7 +21,7 @@
 
 #include "amaudio.h"
 
-#define AMAUDIO_DEVICE_COUNT    ARRAY_SIZE(amaudio_ports)
+#define AMAUDIO_DEVICE_COUNT    3
 
     
 MODULE_DESCRIPTION("AMLOGIC Audio Control Interface driver");
@@ -53,7 +53,6 @@ typedef struct{
   struct device* dev;
   const struct file_operations* fops;
 }amaudio_port_t;
-extern void audio_in_i2s_enable(int flag);
 
 extern int if_audio_in_i2s_enable(void);
 extern int if_audio_out_enable(void);
@@ -61,15 +60,11 @@ extern unsigned int read_i2s_rd_ptr(void);
 extern unsigned int audio_in_i2s_wr_ptr(void);
 extern unsigned int read_i2s_mute_swap_reg(void);
 extern void audio_i2s_swap_left_right(unsigned int flag);
-extern void audio_in_i2s_set_buf(u32 addr, u32 size);
-extern void audio_in_i2s_enable(int flag);
 extern int audio_out_buf_ready ;
 extern int audio_in_buf_ready;
 
 extern unsigned int aml_pcm_playback_start_addr;
 extern unsigned int aml_pcm_capture_start_addr;
-extern unsigned int aml_pcm_capture_start_phy;
-extern unsigned int aml_pcm_capture_buf_size;
 
 static dev_t amaudio_devno;
 static struct class* amaudio_clsp;
@@ -94,6 +89,9 @@ static unsigned int enable_resample_flag=0;
 static unsigned int resample_type_flag=0; //0-->no resample  processing
                                            //1-->down resample processing
                                            //2-->up     resample processing
+/*resample update for sync*/
+extern unsigned int timestamp_enable_resample_flag;
+extern unsigned int timestamp_resample_type_flag;
 //--------------------------------------------
 #define DEBUG_DUMP 1
 
@@ -107,8 +105,8 @@ extern unsigned int dac_mute_const;
 
 static unsigned int audio_in_int_cnt = 0;
 static unsigned int level2 = 0;
-//static int last_out_status = 0;
-//static int last_in_status = 0;
+static int last_out_status = 0;
+static int last_in_status = 0;
 static int amaudio_in_started = 0;
 static int amaudio_out_started = 0;
 
@@ -137,7 +135,6 @@ static int aprint(const char *fmt, ...)
 {
   va_list args;
   int r=0;
-  va_start(args, fmt);
   if(enable_debug){
     r = printk(fmt, args);
   }
@@ -473,8 +470,7 @@ static irqreturn_t amaudio_in_callback(int irq, void*data)
 
  //   aprint("+ level = %d, count=%d\n", amaudio_inbuf.level, count/2);
     
-//err: 
- int_in = 0;    
+    int_in = 0;    
 
     spin_unlock(&amaudio_clk_lock);
     return IRQ_HANDLED;
@@ -631,15 +627,9 @@ static int amaudio_open(struct inode *inode, struct file *file);
 
 static int amaudio_release(struct inode *inode, struct file *file);
 
-static long amaudio_ioctl(struct file *file,
-                        unsigned int cmd, unsigned long arg);
+static int amaudio_ioctl(struct inode *inode, struct file *file,
+                        unsigned int cmd, ulong arg);
 
-static int amaudio_utils_open(struct inode *inode, struct file *file);
-
-static int amaudio_utils_release(struct inode *inode, struct file *file);
-
-static long amaudio_utils_ioctl(struct file *file,
-                        unsigned int cmd, unsigned long arg);
 const static struct file_operations amaudio_out_fops = {
   .owner    =   THIS_MODULE,
   .open     =   amaudio_open,
@@ -663,12 +653,6 @@ const static struct file_operations amaudio_ctl_fops = {
   .open     =   amaudio_open,
   .release  =   amaudio_release,
   .unlocked_ioctl    =   amaudio_ioctl,
-};  
-const static struct file_operations amaudio_utils_fops = {
-  .owner    =   THIS_MODULE,
-  .open     =   amaudio_utils_open,
-  .release  =   amaudio_utils_release,
-  .unlocked_ioctl    =   amaudio_utils_ioctl,
 };
 
 static amaudio_port_t amaudio_ports[]={
@@ -683,10 +667,6 @@ static amaudio_port_t amaudio_ports[]={
   {
     .name = "amaudio_ctl",
     .fops = &amaudio_ctl_fops,
-  },
-  {
-    .name = "amaudio_utils",
-    .fops = &amaudio_utils_fops,
   },
 };
 
@@ -1186,7 +1166,7 @@ static int audout_irq_alloced = 0;
 
 static int amaudio_open(struct inode *inode, struct file *file)
 {
-  amaudio_port_t* this = &amaudio_ports[iminor(inode)];      
+  amaudio_port_t* this = &amaudio_ports[0];      
   amaudio_t * amaudio = kzalloc(sizeof(amaudio_t), GFP_KERNEL);
   int tmp=0;
   if (audio_in_buf_ready && iminor(inode)== 1){
@@ -1280,11 +1260,7 @@ static int amaudio_open(struct inode *inode, struct file *file)
     init_timer(&amaudio_in.timer);
     mod_timer(&amaudio_in.timer, jiffies + 1);
 #else
-#if ((defined CONFIG_SND_AML_M6)||(defined CONFIG_SND_AML_M3))
-	WRITE_MPEG_REG_BITS(AUDIN_INT_CTRL, 0, 1, 1);
-#else
-	WRITE_MPEG_REG_BITS(AUDIN_FIFO0_CTRL, 0, 18, 1);
-#endif
+    WRITE_MPEG_REG_BITS(AUDIN_FIFO0_CTRL, 0, 18, 1);
     tmp = get_audin_ptr();
     tmp =  READ_MPEG_REG(AUDIN_FIFO0_START)+ tmp + 1920;
     if(tmp >= READ_MPEG_REG(AUDIN_FIFO0_END))tmp -= amaudio->in_size;
@@ -1301,20 +1277,9 @@ static int amaudio_open(struct inode *inode, struct file *file)
     int_in_enable = 1;
     amaudio_in_started = 1;
 #endif    
-  }else if(iminor(inode) == 2){						// audio control
+  }else{						// audio control
   	aprint("open audio control\n");
 	amaudio->type = 2;
-  }else if(iminor(inode) == 3){						// audio effect control
-  	//printk("open audio effect control\n");
-	amaudio->type = 3;
-  } 
-  else if(iminor(inode) == 4){			//audio utils
-  	printk("open audio utils control\n");
-	amaudio->type = 4;
-  }
-  else {
-  	printk("err,this amaudio inode not implement yet\n");
-	return -EINVAL;
   }
   file->private_data = amaudio;
   file->f_op = this->fops;
@@ -1363,8 +1328,8 @@ static int amaudio_release(struct inode *inode, struct file *file)
 
 	return 0;
 }
-static long amaudio_ioctl(struct file *file,
-                        unsigned int cmd, unsigned long arg)
+static int amaudio_ioctl(struct inode *inode, struct file *file,
+                        unsigned int cmd, ulong arg)
 {
 	s32 r = 0;
 	u32 reg;
@@ -1499,97 +1464,6 @@ static long amaudio_ioctl(struct file *file,
 	return r;
 }
 
-static int amaudio_utils_open(struct inode *inode, struct file *file)
-{
-  return 0;
-}
-static int amaudio_utils_release(struct inode *inode, struct file *file)
-{   
-  return 0;
-}
-static long amaudio_utils_ioctl(struct file *file,
-                        unsigned int cmd, unsigned long arg)
-{
-    s32 r = 0;
-    u32 reg;
-    //amaudio_t * amaudio = (amaudio_t *)file->private_data;
-    switch(cmd) {
-        case AMAUDIO_IOC_SET_LEFT_MONO:
-            audio_i2s_swap_left_right(1);
-            break;
-        case AMAUDIO_IOC_SET_RIGHT_MONO:
-            audio_i2s_swap_left_right(2);
-            break;
-        case AMAUDIO_IOC_SET_STEREO:
-            audio_i2s_swap_left_right(0);
-            break;
-        case AMAUDIO_IOC_SET_CHANNEL_SWAP:
-            reg = read_i2s_mute_swap_reg();
-            if(reg & 0x3)
-                audio_i2s_swap_left_right(0);
-            else
-            	audio_i2s_swap_left_right(3);
-            break;
-        case AMAUDIO_IOC_DIRECT_AUDIO:
-            direct_audio_ctrl(arg);
-            break;		
-        case AMAUDIO_IOC_DIRECT_LEFT_GAIN:
-            direct_audio_left_gain(arg);
-            break;
-        case AMAUDIO_IOC_DIRECT_RIGHT_GAIN:
-            direct_audio_right_gain(arg);
-            break;
-
-        case AMAUDIO_IOC_START_LINE_IN:
-            // select audio codec output as I2S source
-         //   WRITE_MPEG_REG(AUDIN_SOURCE_SEL, (1<<0));
-            // prepare aiu
-        //    audio_in_i2s_set_buf(aml_pcm_capture_start_phy, aml_pcm_capture_buf_size*2);
-            memset((void*)aml_pcm_capture_start_addr,0,aml_pcm_capture_buf_size*2);
-            // prepare codec
-     //       aml_linein_start();
-            // trigger aiu
-            printk("i2s in enable\n");
-            audio_in_i2s_enable(1);
-            break;
-        case AMAUDIO_IOC_STOP_LINE_IN:
-            // stop aiu
-            printk("i2s in disable\n");            
-            audio_in_i2s_enable(0);
-            // stop codec
-     //       aml_linein_stop();
-            break;
-#if 0			
-        case AMAUDIO_IOC_START_HDMI_IN:
-            // set audio in source to hdmi in
-            WRITE_MPEG_REG(AUDIN_SOURCE_SEL,    (1<<4) | (2 << 0));    // Select HDMI RX output as AUDIN source
-            // prepare aiu
-            audio_in_i2s_set_buf(aml_pcm_capture_start_phy, aml_pcm_capture_buf_size*2);
-            memset((void*)aml_pcm_capture_start_addr,0,aml_pcm_capture_buf_size*2);            
-            // trigger aiu
-            audio_in_i2s_enable(1);
-            break;
-        case AMAUDIO_IOC_STOP_HDMI_IN:
-            // stop aiu
-            audio_in_i2s_enable(0);
-            // set audio in source to line in
-            WRITE_MPEG_REG(AUDIN_SOURCE_SEL, (1<<0)); // select audio codec output as I2S source
-            break;
-#endif			
-        case AMAUDIO_IOC_GET_RESAMPLE_ENA:
-            *((u32 *)arg) = enable_resample_flag;
-            break;
-        case AMAUDIO_IOC_SET_RESAMPLE_ENA:
-            enable_resample_flag = arg;
-            break;
-        case AMAUDIO_IOC_SET_RESAMPLE_TYPE:
-            resample_type_flag = arg;
-            break;    
-        default:
-        	break;
-    };
-    return r;
-}
 static const struct file_operations amaudio_fops = {
   .owner    =   THIS_MODULE,
   .open     =   amaudio_open,
@@ -1690,33 +1564,27 @@ static ssize_t show_enable_dump(struct class* class, struct class_attribute* att
   int i, j;
   printk("AMAUDIO DUMP HardWBuf Start: in hwptr=%d, in rd=%d, out hwptr=%d, out wr=%d\n", get_audin_ptr(), amaudio_in.in_rd_ptr, get_audout_ptr(), amaudio_out.out_wr_ptr);
   audio_in_i2s_enable(0);
-  if (dump_buf) {
-      for(i=0; i< dump_size; i+=8){
-        for(j=0; j<8; j++){
-          printk("%04x,",dump_buf[i+j]);
-        }
-        printk("\n");
-      }
+  for(i=0; i< dump_size; i+=8){
+    for(j=0; j<8; j++){
+      printk("%04x,",dump_buf[i+j]);
+    }
+    printk("\n");
   }
+  
   printk("AMAUDIo DUMp FINISHED\n\n\n");
-
-  if (amaudio_in.in_start) {
-      for(i=0; i< amaudio_in.in_size/4; i+=8){
-        for(j=0; j<8; j++){
-          printk("%08x,", *((unsigned *)(amaudio_in.in_start) + i + j));
-        }
-        printk("\n");
-      }
+  for(i=0; i< amaudio_in.in_size/4; i+=8){
+    for(j=0; j<8; j++){
+      printk("%08x,", *((unsigned *)(amaudio_in.in_start) + i + j));
+    }
+    printk("\n");
   }
 
   printk("OUTPUT\n");
-  if (amaudio_in.out_start) {
-      for(i=0; i<amaudio_out.out_size/4; i+= 8){
-        for(j=0; j< 8; j++){
-          printk("%08x,", *((unsigned*)(amaudio_out.out_start) + i + j));
-        }
-        printk("\n");
-      }
+  for(i=0; i<amaudio_out.out_size/4; i+= 8){
+    for(j=0; j< 8; j++){
+      printk("%08x,", *((unsigned*)(amaudio_out.out_start) + i + j));
+    }
+    printk("\n");
   }
   printk("Hardware Buf finished: audio in error: %d, error flag = %d\n", in_error, in_error_flag);
   audio_in_i2s_enable(1);
@@ -1727,8 +1595,6 @@ static ssize_t show_enable_dump(struct class* class, struct class_attribute* att
 static ssize_t store_enable_dump(struct class* class, struct class_attribute* attr,
    const char* buf, size_t count )
 {
-  //unsigned long flags;
-  
   unsigned int tmp = 0;
 
   if(buf[0] == '0'){
@@ -1823,8 +1689,10 @@ static ssize_t store_enable_resample(struct class* class, struct class_attribute
 {
   if(buf[0] == '0'){
     enable_resample_flag = 0;
+    timestamp_enable_resample_flag = 0;
   }else if(buf[0] == '1'){
     enable_resample_flag = 1;
+    timestamp_enable_resample_flag = 1;
   }
   return count;
 }
@@ -1839,7 +1707,6 @@ static ssize_t show_resample_type(struct class* class, struct class_attribute* a
      }else if(resample_type_flag==2){//2-->up resample processing
          return sprintf(buf, "UP\n");
      }
-     return sprintf(buf, "Error\n");
 }
 
 static ssize_t store_resample_type(struct class* class, struct class_attribute* attr,
@@ -1847,13 +1714,17 @@ static ssize_t store_resample_type(struct class* class, struct class_attribute* 
 {
   if(buf[0] == '0'){ 
     resample_type_flag = 0;  //0-->no resample  processing
+    timestamp_resample_type_flag = 0;
   }else if(buf[0] == '1'){     
     resample_type_flag = 1;  //1-->down resample processing
+    timestamp_resample_type_flag = 1;
   }else if(buf[0] == '2'){
     resample_type_flag = 2;  //2-->up resample processing
+    timestamp_resample_type_flag = 2;
   }
   return count;
 }
+
 static ssize_t dac_mute_const_show(struct class*cla, struct class_attribute* attr, char* buf)
 {
   char* pbuf = buf;
@@ -1872,13 +1743,11 @@ static ssize_t dac_mute_const_store(struct class* class, struct class_attribute*
   return count;
 }
 
-//--------------------------------------------
-static ssize_t output_enable_show(struct class* class, struct class_attribute* attr,
-	char* buf)
+static ssize_t output_enable_show(struct class*cla, struct class_attribute* attr, char* buf)
 {
-     return sprintf(buf, "%d\n", if_audio_out_enable()); 
+    return sprintf(buf, "%d\n", if_audio_out_enable());	
 }
-
+//--------------------------------------------
 static struct class_attribute amaudio_attrs[]={
   __ATTR(enable_direct_audio,  S_IRUGO | S_IWUSR, show_direct_flag, store_direct_flag),
   __ATTR(enable_music_mix, S_IRUGO | S_IWUSR, show_music_mix, store_music_mix),
@@ -1899,8 +1768,7 @@ static void create_amaudio_attrs(struct class* class)
 {
   int i=0;
   for(i=0; amaudio_attrs[i].attr.name; i++){
-    if(class_create_file(class, &amaudio_attrs[i]) < 0)
-      break;
+    class_create_file(class, &amaudio_attrs[i]);
   }
 }
 

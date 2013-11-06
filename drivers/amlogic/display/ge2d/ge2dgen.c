@@ -1,7 +1,4 @@
 #include <linux/ge2d/ge2d.h>
-#ifndef CONFIG_ARCH_MESON6
-#include <mach/cpu.h>
-#endif
 
 static inline void _set_src1_format(ge2d_src1_data_t *src1_data_cfg,
                                      ge2d_src1_gen_t *src1_gen_cfg,
@@ -60,43 +57,30 @@ static inline void _set_dst_format(ge2d_src2_dst_data_t *src2_dst_data_cfg,
                              unsigned format_src,
                              unsigned format_dst)
 {
-	src2_dst_data_cfg->dst_format_all  = format_dst;
+    src2_dst_data_cfg->dst_format_all  = format_dst;
 
-	src2_dst_data_cfg->dst_format      = (format_dst >> 8) & 3;
+    src2_dst_data_cfg->dst_format      = (format_dst >> 8) & 3;
 
 	src2_dst_data_cfg->dst_endian      = (format_dst & GE2D_ENDIAN_MASK) >> GE2D_ENDIAN_SHIFT;
 	src2_dst_data_cfg->dst_color_map   = (format_dst & GE2D_COLOR_MAP_MASK) >> GE2D_COLOR_MAP_SHIFT;
+  
+    src2_dst_data_cfg->dst_mode_8b_sel = (format_dst >> 6) & 3;
 
-	src2_dst_data_cfg->dst_mode_8b_sel = (format_dst >> 6) & 3;
+    src2_dst_gen_cfg->dst_pic_struct   = (format_dst >> 3) & 3;
 
-	src2_dst_gen_cfg->dst_pic_struct   = (format_dst >> 3) & 3;
-
-	if ((format_src & GE2D_FORMAT_YUV) && 
-				((format_dst & GE2D_FORMAT_YUV) == 0)) {
-		dp_gen_cfg->use_matrix_default = (format_src & GE2D_FORMAT_COMP_RANGE) ? MATRIX_FULL_RANGE_YCC_TO_RGB : MATRIX_YCC_TO_RGB;
-		dp_gen_cfg->conv_matrix_en = 1;
-	}
-	else if (((format_src & GE2D_FORMAT_YUV) == 0) &&
-			(format_dst & GE2D_FORMAT_YUV)) {
-		dp_gen_cfg->use_matrix_default = MATRIX_RGB_TO_YCC;
-		dp_gen_cfg->conv_matrix_en = 1;
-	}
-	else {
-		dp_gen_cfg->conv_matrix_en = 0;
-	}
-
-#if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6
-	/* for dest is nv21 or nv12 in m6. */
-	if((format_dst & GE2D_FORMAT_YUV) && ((src2_dst_data_cfg->dst_color_map|1)==15)) {
-		src2_dst_data_cfg->dst_format = 0;
-		src2_dst_data_cfg->dst_mode_8b_sel = 0;
-		src2_dst_data_cfg->dst2_pixel_byte_width = 1;
-		src2_dst_data_cfg->dst2_discard_mode = 0xf;
-		src2_dst_data_cfg->dst2_enable = 1;
-		src2_dst_data_cfg->dst2_color_map = src2_dst_data_cfg->dst_color_map - 5;
-	} else 
-		src2_dst_data_cfg->dst2_enable = 0;
-#endif
+    if ((format_src & GE2D_FORMAT_YUV) &&
+        ((format_dst & GE2D_FORMAT_YUV) == 0)) {
+        dp_gen_cfg->use_matrix_default = (format_src & GE2D_FORMAT_COMP_RANGE) ? MATRIX_FULL_RANGE_YCC_TO_RGB : MATRIX_YCC_TO_RGB;
+        dp_gen_cfg->conv_matrix_en = 1;
+    }
+    else if (((format_src & GE2D_FORMAT_YUV) == 0) &&
+             (format_dst & GE2D_FORMAT_YUV)) {
+        dp_gen_cfg->use_matrix_default = MATRIX_RGB_TO_YCC;
+        dp_gen_cfg->conv_matrix_en = 1;
+    }
+    else {
+        dp_gen_cfg->conv_matrix_en = 0;
+    }
 }
 void ge2dgen_src(ge2d_context_t *wq,
                  unsigned canvas_addr,
