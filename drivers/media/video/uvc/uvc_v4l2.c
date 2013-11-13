@@ -17,7 +17,6 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/usb.h>
-#include <linux/uvcvideo.h>
 #include <linux/videodev2.h>
 #include <linux/vmalloc.h>
 #include <linux/mm.h>
@@ -25,9 +24,9 @@
 #include <asm/atomic.h>
 
 #include <media/v4l2-common.h>
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 26)
 #include <media/v4l2-ioctl.h>
-#endif
+
+#include "uvcvideo.h"
 
 /* ------------------------------------------------------------------------
  * UVC ioctls
@@ -62,6 +61,15 @@ static int uvc_ioctl_ctrl_map(struct uvc_video_chain *chain,
 		if (old) {
 			uvc_trace(UVC_TRACE_CONTROL, "V4L2_CTRL_TYPE_MENU not "
 				  "supported for UVCIOC_CTRL_MAP_OLD.\n");
+			ret = -EINVAL;
+			goto done;
+		}
+
+		/* Prevent excessive memory consumption, as well as integer
+		 * overflows.
+		 */
+		if (xmap->menu_count == 0 ||
+		    xmap->menu_count > UVC_MAX_CONTROL_MENU_ENTRIES) {
 			ret = -EINVAL;
 			goto done;
 		}
@@ -377,6 +385,11 @@ static int uvc_v4l2_set_streamparm(struct uvc_streaming *stream,
 
 	mutex_lock(&stream->mutex);
 
+	if (uvc_queue_streaming(&stream->queue)) {
+		mutex_unlock(&stream->mutex);
+		return -EBUSY;
+	}
+
 	memcpy(&probe, &stream->ctrl, sizeof probe);
 	probe.dwFrameInterval =
 		uvc_try_frame_interval(stream->cur_frame, interval);
@@ -389,13 +402,6 @@ static int uvc_v4l2_set_streamparm(struct uvc_streaming *stream,
 	}
 
 	memcpy(&stream->ctrl, &probe, sizeof probe);
-
-	ret = uvc_commit_video(stream, &stream->ctrl);
-	if (ret < 0) {
-		mutex_unlock(&stream->mutex);
-		return ret;
-	}
-
 	mutex_unlock(&stream->mutex);
 
 	/* Return the actual frame period. */
@@ -510,10 +516,6 @@ static int uvc_v4l2_open(struct file *file)
 	handle->state = UVC_HANDLE_PASSIVE;
 	file->private_data = handle;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-	kref_get(&stream->dev->kref);
-#endif
-
 	return 0;
 }
 
@@ -542,22 +544,19 @@ static int uvc_v4l2_release(struct file *file)
 		uvc_status_stop(stream->dev);
 
 	usb_autopm_put_interface(stream->dev->intf);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-	kref_put(&stream->dev->kref, uvc_delete);
-#endif
 	return 0;
 }
 
 static void uvc_v4l2_ioctl_warn(void)
 {
-	static int warned = 0;
+	static int warned;
 
 	if (warned)
 		return;
 
 	uvc_printk(KERN_INFO, "Deprecated UVCIOC_CTRL_{ADD,MAP_OLD,GET,SET} "
-		   "ioctls will be removed in 2.6.39.\n");
-	uvc_printk(KERN_INFO, "See http://www.ideasonboard.org/uvc/ "
+		   "ioctls will be removed in 2.6.42.\n");
+	uvc_printk(KERN_INFO, "See http://www.ideasonboard.org/uvc/upgrade/ "
 		   "for upgrade instructions.\n");
 	warned = 1;
 }
@@ -711,7 +710,7 @@ static long uvc_v4l2_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 					break;
 			}
 			pin = iterm->id;
-		} else if (pin < selector->bNrInPins) {
+		} else if (index < selector->bNrInPins) {
 			pin = selector->baSourceID[index];
 			list_for_each_entry(iterm, &chain->entities, chain) {
 				if (!UVC_ENTITY_IS_ITERM(iterm))
@@ -1044,26 +1043,27 @@ static long uvc_v4l2_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 
 	/* Dynamic controls. UVCIOC_CTRL_ADD, UVCIOC_CTRL_MAP_OLD,
 	 * UVCIOC_CTRL_GET and UVCIOC_CTRL_SET are deprecated and scheduled for
-	 * removal in 2.6.39.
+	 * removal in 2.6.42.
 	 */
-	case UVCIOC_CTRL_ADD:
+	case __UVCIOC_CTRL_ADD:
 		uvc_v4l2_ioctl_warn();
 		return -EEXIST;
 
-	case UVCIOC_CTRL_MAP_OLD:
+	case __UVCIOC_CTRL_MAP_OLD:
 		uvc_v4l2_ioctl_warn();
+	case __UVCIOC_CTRL_MAP:
 	case UVCIOC_CTRL_MAP:
 		return uvc_ioctl_ctrl_map(chain, arg,
-					  cmd == UVCIOC_CTRL_MAP_OLD);
+					  cmd == __UVCIOC_CTRL_MAP_OLD);
 
-	case UVCIOC_CTRL_GET:
-	case UVCIOC_CTRL_SET:
+	case __UVCIOC_CTRL_GET:
+	case __UVCIOC_CTRL_SET:
 	{
 		struct uvc_xu_control *xctrl = arg;
 		struct uvc_xu_control_query xqry = {
 			.unit		= xctrl->unit,
 			.selector	= xctrl->selector,
-			.query		= cmd == UVCIOC_CTRL_GET
+			.query		= cmd == __UVCIOC_CTRL_GET
 					? UVC_GET_CUR : UVC_SET_CUR,
 			.size		= xctrl->size,
 			.data		= xctrl->data,
@@ -1123,29 +1123,17 @@ static unsigned int uvc_v4l2_poll(struct file *file, poll_table *wait)
 	return uvc_queue_poll(&stream->queue, file, wait);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
-#undef uvc_v4l2_open
-static int uvc_v4l2_open(struct inode *inode, struct file *filp)
+#ifndef CONFIG_MMU
+static unsigned long uvc_v4l2_get_unmapped_area(struct file *file,
+		unsigned long addr, unsigned long len, unsigned long pgoff,
+		unsigned long flags)
 {
-	return uvc_v4l2_open_compat(filp);
-}
+	struct uvc_fh *handle = file->private_data;
+	struct uvc_streaming *stream = handle->stream;
 
-#undef uvc_v4l2_release
-static int uvc_v4l2_release(struct inode *inode, struct file *filp)
-{
-	return uvc_v4l2_release_compat(filp);
-}
+	uvc_trace(UVC_TRACE_CALLS, "uvc_v4l2_get_unmapped_area\n");
 
-#undef video_usercopy
-static int uvc_v4l2_do_ioctl_compat(struct inode *inode, struct file *file,
-		       unsigned int cmd, void *arg)
-{
-	return uvc_v4l2_do_ioctl(file, cmd, arg);
-}
-long video_usercopy_compat(struct file *file, unsigned int cmd,
-			   unsigned long arg, void* func)
-{
-	return video_usercopy(NULL, file, cmd, arg, uvc_v4l2_do_ioctl_compat);
+	return uvc_queue_get_unmapped_area(&stream->queue, pgoff);
 }
 #endif
 
@@ -1157,5 +1145,8 @@ const struct v4l2_file_operations uvc_fops = {
 	.read		= uvc_v4l2_read,
 	.mmap		= uvc_v4l2_mmap,
 	.poll		= uvc_v4l2_poll,
+#ifndef CONFIG_MMU
+	.get_unmapped_area = uvc_v4l2_get_unmapped_area,
+#endif
 };
 

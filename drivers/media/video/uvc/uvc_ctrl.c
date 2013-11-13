@@ -17,12 +17,12 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/usb.h>
-#include <linux/uvcvideo.h>
 #include <linux/videodev2.h>
 #include <linux/vmalloc.h>
 #include <linux/wait.h>
 #include <asm/atomic.h>
 
+#include "uvcvideo.h"
 
 #define UVC_CTRL_DATA_CURRENT	0
 #define UVC_CTRL_DATA_BACKUP	1
@@ -1015,6 +1015,24 @@ int uvc_query_v4l2_menu(struct uvc_video_chain *chain,
 	}
 
 	menu_info = &mapping->menu_info[query_menu->index];
+
+	if (ctrl->info.flags & UVC_CTRL_FLAG_GET_RES) {
+		s32 bitmap;
+
+		if (!ctrl->cached) {
+			ret = uvc_ctrl_populate_cache(chain, ctrl);
+			if (ret < 0)
+				goto done;
+		}
+
+		bitmap = mapping->get(mapping, UVC_GET_RES,
+				      uvc_ctrl_data(ctrl, UVC_CTRL_DATA_RES));
+		if (!(bitmap & menu_info->value)) {
+			ret = -EINVAL;
+			goto done;
+		}
+	}
+
 	strlcpy(query_menu->name, menu_info->name, sizeof query_menu->name);
 
 done:
@@ -1203,6 +1221,23 @@ int uvc_ctrl_set(struct uvc_video_chain *chain,
 		if (xctrl->value < 0 || xctrl->value >= mapping->menu_count)
 			return -ERANGE;
 		value = mapping->menu_info[xctrl->value].value;
+
+		/* Valid menu indices are reported by the GET_RES request for
+		 * UVC controls that support it.
+		 */
+		if (ctrl->info.flags & UVC_CTRL_FLAG_GET_RES) {
+			if (!ctrl->cached) {
+				ret = uvc_ctrl_populate_cache(chain, ctrl);
+				if (ret < 0)
+					return ret;
+			}
+
+			step = mapping->get(mapping, UVC_GET_RES,
+					uvc_ctrl_data(ctrl, UVC_CTRL_DATA_RES));
+			if (!(step & value))
+				return -ERANGE;
+		}
+
 		break;
 
 	default:
@@ -1629,20 +1664,16 @@ int uvc_ctrl_add_mapping(struct uvc_video_chain *chain,
 		return -EINVAL;
 	}
 
-	/* Search for the matching (GUID/CS) control on the current chain */
-	list_for_each_entry(entity, &chain->entities, chain) {
+	/* Search for the matching (GUID/CS) control in the given device */
+	list_for_each_entry(entity, &dev->entities, list) {
 		unsigned int i;
 
-		if (!uvc_entity_match_guid(entity, mapping->entity))
+		if (UVC_ENTITY_TYPE(entity) != UVC_VC_EXTENSION_UNIT ||
+		    !uvc_entity_match_guid(entity, mapping->entity))
 			continue;
 
 		for (i = 0; i < entity->ncontrols; ++i) {
 			ctrl = &entity->controls[i];
-			if (ctrl->initialized && 
-			    ctrl->info.selector == mapping->selector) {
-				found = 1;
-				break;
-			}
 			if (ctrl->index == mapping->selector - 1) {
 				found = 1;
 				break;

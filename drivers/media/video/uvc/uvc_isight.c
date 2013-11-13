@@ -16,7 +16,8 @@
 #include <linux/usb.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
-#include <linux/uvcvideo.h>
+
+#include "uvcvideo.h"
 
 /* Built-in iSight webcams implements most of UVC 1.0 except a
  * different packet format. Instead of sending a header at the

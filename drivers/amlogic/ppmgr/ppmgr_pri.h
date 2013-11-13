@@ -17,8 +17,8 @@ extern void set_ppmgr_buf_info(char* start,unsigned int size);
 extern void get_ppmgr_buf_info(char** start,unsigned int* size);
 
 /*  ppmgr buffer op. */
-extern int ppmgr_buffer_init(void);
+extern int ppmgr_buffer_init(int vout_mode);
 extern void vf_ppmgr_reset(int type);
-extern int ppmgr_register();
+extern int ppmgr_register(void);
 
 #endif /* _PPMGR_PRI_INCLUDE__ */

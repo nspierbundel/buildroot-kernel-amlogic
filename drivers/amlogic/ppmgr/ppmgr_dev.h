@@ -1,6 +1,6 @@
 #ifndef PPMGR_DEV_INCLUDE_H
 #define PPMGR_DEV_INCLUDE_H
-
+#include <linux/amports/vframe.h>
 typedef  struct {
 	struct class 		*cla;
 	struct device		*dev;
@@ -18,6 +18,8 @@ typedef  struct {
 	int bypass;
 	int disp_width;
 	int disp_height;
+	int canvas_width;
+	int canvas_height;
 #ifdef CONFIG_POST_PROCESS_MANAGER_PPSCALER
 	int ppscaler_flag;
 	int scale_h_start;
@@ -25,14 +27,32 @@ typedef  struct {
 	int scale_v_start;
 	int scale_v_end;
 #endif
+#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
+	unsigned ppmgr_3d_mode;
+	unsigned direction_3d;
+	int viewmode;
+	unsigned scale_down;
+#endif
 	const vinfo_t *vinfo;
 	int left;
 	int top;
 	int width;
 	int height;
-	
-	int video_out;
+	int receiver;
+	int receiver_format;
+	int display_mode;
+	int mirror_flag;
 }ppmgr_device_t;
+
+typedef struct ppframe_s {
+    vframe_t  frame;
+    int       index;
+    int       angle;
+    vframe_t  *dec_frame;
+} ppframe_t;
+
+#define to_ppframe(vf)	\
+	container_of(vf, struct ppframe_s, frame)
 
 extern ppmgr_device_t  ppmgr_device;
 #endif /* PPMGR_DEV_INCLUDE_H. */

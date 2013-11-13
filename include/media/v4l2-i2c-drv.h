@@ -74,7 +74,11 @@ static void __exit v4l2_i2c_drv_cleanup(void)
 	i2c_del_driver(&v4l2_i2c_driver);
 }
 
+#ifdef CONFIG_DEFERRED_MODULE_INIT
+deferred_module_init(v4l2_i2c_drv_init);
+#else
 module_init(v4l2_i2c_drv_init);
+#endif
 module_exit(v4l2_i2c_drv_cleanup);
 
 #endif /* __V4L2_I2C_DRV_H__ */

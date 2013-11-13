@@ -28,7 +28,6 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/usb.h>
-#include <linux/uvcvideo.h>
 #include <linux/videodev2.h>
 #include <linux/vmalloc.h>
 #include <linux/wait.h>
@@ -36,6 +35,8 @@
 #include <asm/unaligned.h>
 
 #include <media/v4l2-common.h>
+
+#include "uvcvideo.h"
 
 #define DRIVER_AUTHOR		"Laurent Pinchart " \
 				"<laurent.pinchart@ideasonboard.com>"
@@ -83,6 +84,11 @@ static struct uvc_format_desc uvc_fmts[] = {
 		.fcc		= V4L2_PIX_FMT_YUV420,
 	},
 	{
+		.name		= "YUV 4:2:0 (M420)",
+		.guid		= UVC_GUID_FORMAT_M420,
+		.fcc		= V4L2_PIX_FMT_M420,
+	},
+	{
 		.name		= "YUV 4:2:2 (UYVY)",
 		.guid		= UVC_GUID_FORMAT_UYVY,
 		.fcc		= V4L2_PIX_FMT_UYVY,
@@ -103,14 +109,9 @@ static struct uvc_format_desc uvc_fmts[] = {
 		.fcc		= V4L2_PIX_FMT_SBGGR8,
 	},
 	{
-		.name		= "MPEG2 TS",
-		.guid		= UVC_GUID_FORMAT_MPEG,
-		.fcc		= V4L2_PIX_FMT_MPEG,
-	},
-	{
-		.name		= "H.264",
-		.guid		= UVC_GUID_FORMAT_H264,
-		.fcc		= V4L2_PIX_FMT_H264,
+		.name		= "RGB565",
+		.guid		= UVC_GUID_FORMAT_RGBP,
+		.fcc		= V4L2_PIX_FMT_RGB565,
 	},
 };
 
@@ -247,7 +248,7 @@ uint32_t uvc_fraction_to_interval(uint32_t numerator, uint32_t denominator)
  * Terminal and unit management
  */
 
-static struct uvc_entity *uvc_entity_by_id(struct uvc_device *dev, int id)
+struct uvc_entity *uvc_entity_by_id(struct uvc_device *dev, int id)
 {
 	struct uvc_entity *entity;
 
@@ -407,33 +408,6 @@ static int uvc_parse_format(struct uvc_device *dev,
 		break;
 
 	case UVC_VS_FORMAT_MPEG2TS:
-		n = dev->uvc_version >= 0x0110 ? 23 : 7;
-		if (buflen < n) {
-			uvc_trace(UVC_TRACE_DESCR, "device %d videostreaming "
-			       "interface %d FORMAT error\n",
-			       dev->udev->devnum,
-			       alts->desc.bInterfaceNumber);
-			return -EINVAL;
-		}
-
-		strlcpy(format->name, "MPEG2 TS", sizeof format->name);
-		format->fcc = V4L2_PIX_FMT_MPEG;
-		format->flags = UVC_FMT_FLAG_COMPRESSED | UVC_FMT_FLAG_STREAM;
-		format->bpp = 0;
-		ftype = 0;
-
-		/* Create a dummy frame descriptor. */
-		frame = &format->frame[0];
-		memset(&format->frame[0], 0, sizeof format->frame[0]);
-		frame->bFrameIntervalType = 0;
-		frame->dwDefaultFrameInterval = 1;
-		frame->dwFrameInterval = *intervals;
-		*(*intervals)++ = 1;
-		*(*intervals)++ = 10000000;
-		*(*intervals)++ = 1;
-		format->nframes = 1;
-		break;
-
 	case UVC_VS_FORMAT_STREAM_BASED:
 		/* Not supported yet. */
 	default:
@@ -709,14 +683,6 @@ static int uvc_parse_streaming(struct uvc_device *dev,
 			break;
 
 		case UVC_VS_FORMAT_MPEG2TS:
-			/* MPEG2TS format has no frame descriptor. We will create a
-			 * dummy frame descriptor with a dummy frame interval range.
-			 */
-			nformats++;
-			nframes++;
-			nintervals += 3;
-			break;
-
 		case UVC_VS_FORMAT_STREAM_BASED:
 			uvc_trace(UVC_TRACE_DESCR, "device %d videostreaming "
 				"interface %d FORMAT %u is not supported.\n",
@@ -768,7 +734,6 @@ static int uvc_parse_streaming(struct uvc_device *dev,
 		switch (buffer[2]) {
 		case UVC_VS_FORMAT_UNCOMPRESSED:
 		case UVC_VS_FORMAT_MJPEG:
-		case UVC_VS_FORMAT_MPEG2TS:
 		case UVC_VS_FORMAT_DV:
 		case UVC_VS_FORMAT_FRAME_BASED:
 			format->frame = frame;
@@ -830,9 +795,12 @@ static struct uvc_entity *uvc_alloc_entity(u16 type, u8 id,
 	struct uvc_entity *entity;
 	unsigned int num_inputs;
 	unsigned int size;
+	unsigned int i;
 
+	extra_size = ALIGN(extra_size, sizeof(*entity->pads));
 	num_inputs = (type & UVC_TERM_OUTPUT) ? num_pads : num_pads - 1;
-	size = sizeof(*entity) + extra_size + num_inputs;
+	size = sizeof(*entity) + extra_size + sizeof(*entity->pads) * num_pads
+	     + num_inputs;
 	entity = kzalloc(size, GFP_KERNEL);
 	if (entity == NULL)
 		return NULL;
@@ -840,8 +808,17 @@ static struct uvc_entity *uvc_alloc_entity(u16 type, u8 id,
 	entity->id = id;
 	entity->type = type;
 
+	entity->num_links = 0;
+	entity->num_pads = num_pads;
+	entity->pads = ((void *)(entity + 1)) + extra_size;
+
+	for (i = 0; i < num_inputs; ++i)
+		entity->pads[i].flags = MEDIA_PAD_FL_SINK;
+	if (!UVC_ENTITY_IS_OTERM(entity))
+		entity->pads[num_pads-1].flags = MEDIA_PAD_FL_SOURCE;
+
 	entity->bNrInPins = num_inputs;
-	entity->baSourceID = ((__u8 *)entity) + sizeof(*entity) + extra_size;
+	entity->baSourceID = (__u8 *)(&entity->pads[num_pads]);
 
 	return entity;
 }
@@ -1309,6 +1286,14 @@ static int uvc_scan_chain_entity(struct uvc_video_chain *chain,
 
 		break;
 
+	case UVC_OTT_VENDOR_SPECIFIC:
+	case UVC_OTT_DISPLAY:
+	case UVC_OTT_MEDIA_TRANSPORT_OUTPUT:
+		if (uvc_trace_param & UVC_TRACE_PROBE)
+			printk(" OT %d", entity->id);
+
+		break;
+
 	case UVC_TT_STREAMING:
 		if (UVC_ENTITY_IS_ITERM(entity)) {
 			if (uvc_trace_param & UVC_TRACE_PROBE)
@@ -1602,14 +1587,8 @@ static int uvc_scan_device(struct uvc_device *dev)
  * already been canceled by the USB core. There is no need to kill the
  * interrupt URB manually.
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-void uvc_delete(struct kref *kref)
-{
-	struct uvc_device *dev = container_of(kref, struct uvc_device, kref);
-#else
 static void uvc_delete(struct uvc_device *dev)
 {
-#endif
 	struct list_head *p, *n;
 
 	usb_put_intf(dev->intf);
@@ -1617,6 +1596,13 @@ static void uvc_delete(struct uvc_device *dev)
 
 	uvc_status_cleanup(dev);
 	uvc_ctrl_cleanup_device(dev);
+
+	if (dev->vdev.dev)
+		v4l2_device_unregister(&dev->vdev);
+#ifdef CONFIG_MEDIA_CONTROLLER
+	if (media_devnode_is_registered(&dev->mdev.devnode))
+		media_device_unregister(&dev->mdev);
+#endif
 
 	list_for_each_safe(p, n, &dev->chains) {
 		struct uvc_video_chain *chain;
@@ -1627,6 +1613,13 @@ static void uvc_delete(struct uvc_device *dev)
 	list_for_each_safe(p, n, &dev->entities) {
 		struct uvc_entity *entity;
 		entity = list_entry(p, struct uvc_entity, list);
+#ifdef CONFIG_MEDIA_CONTROLLER
+		uvc_mc_cleanup_entity(entity);
+#endif
+		if (entity->vdev) {
+			video_device_release(entity->vdev);
+			entity->vdev = NULL;
+		}
 		kfree(entity);
 	}
 
@@ -1649,18 +1642,11 @@ static void uvc_release(struct video_device *vdev)
 	struct uvc_streaming *stream = video_get_drvdata(vdev);
 	struct uvc_device *dev = stream->dev;
 
-	video_device_release(vdev);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-
-	/* Delete the device when all references are removed */
-	kref_put(&dev->kref, uvc_delete);
-#else
 	/* Decrement the registered streams count and delete the device when it
 	 * reaches zero.
 	 */
 	if (atomic_dec_and_test(&dev->nstreams))
 		uvc_delete(dev);
-#endif
 }
 
 /*
@@ -1670,20 +1656,12 @@ static void uvc_unregister_video(struct uvc_device *dev)
 {
 	struct uvc_streaming *stream;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-	/* Unregistering all video devices might result in uvc_delete() being
-	 * called from inside the loop if there's no open file handle. To avoid
-	 * that, take a reference now and remove it after the loop
-	 */
-	kref_get(&dev->kref);
-#else
 	/* Unregistering all video devices might result in uvc_delete() being
 	 * called from inside the loop if there's no open file handle. To avoid
 	 * that, increment the stream count before iterating over the streams
 	 * and decrement it when done.
 	 */
 	atomic_inc(&dev->nstreams);
-#endif
 
 	list_for_each_entry(stream, &dev->streams, list) {
 		if (stream->vdev == NULL)
@@ -1693,18 +1671,11 @@ static void uvc_unregister_video(struct uvc_device *dev)
 		stream->vdev = NULL;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-	/* Remove the reference and delete the device if all references are
-	 * removed
-	 */
-	kref_put(&dev->kref, uvc_delete);
-#else
 	/* Decrement the stream count and call uvc_delete explicitly if there
 	 * are no stream left.
 	 */
 	if (atomic_dec_and_test(&dev->nstreams))
 		uvc_delete(dev);
-#endif
 }
 
 static int uvc_register_video(struct uvc_device *dev,
@@ -1735,9 +1706,7 @@ static int uvc_register_video(struct uvc_device *dev,
 	 * unregistered before the reference is released, so we don't need to
 	 * get another one.
 	 */
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 26)
-	vdev->parent = &dev->intf->dev;
-#endif
+	vdev->v4l2_dev = &dev->vdev;
 	vdev->fops = &uvc_fops;
 	vdev->release = uvc_release;
 	strlcpy(vdev->name, dev->name, sizeof vdev->name);
@@ -1786,6 +1755,8 @@ static int uvc_register_terms(struct uvc_device *dev,
 		ret = uvc_register_video(dev, stream);
 		if (ret < 0)
 			return ret;
+
+		term->vdev = stream->vdev;
 	}
 
 	return 0;
@@ -1800,6 +1771,14 @@ static int uvc_register_chains(struct uvc_device *dev)
 		ret = uvc_register_terms(dev, chain);
 		if (ret < 0)
 			return ret;
+
+#ifdef CONFIG_MEDIA_CONTROLLER
+		ret = uvc_mc_register_entities(chain);
+		if (ret < 0) {
+			uvc_printk(KERN_INFO, "Failed to register entites "
+				"(%d).\n", ret);
+		}
+#endif
 	}
 
 	return 0;
@@ -1834,9 +1813,6 @@ static int uvc_probe(struct usb_interface *intf,
 	atomic_set(&dev->nstreams, 0);
 	atomic_set(&dev->users, 0);
 	atomic_set(&dev->nmappings, 0);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-	kref_init(&dev->kref);
-#endif
 
 	dev->udev = usb_get_dev(udev);
 	dev->intf = usb_get_intf(intf);
@@ -1872,6 +1848,24 @@ static int uvc_probe(struct usb_interface *intf,
 			"linux-uvc-devel mailing list.\n");
 	}
 
+	/* Register the media and V4L2 devices. */
+#ifdef CONFIG_MEDIA_CONTROLLER
+	dev->mdev.dev = &intf->dev;
+	strlcpy(dev->mdev.model, dev->name, sizeof(dev->mdev.model));
+	if (udev->serial)
+		strlcpy(dev->mdev.serial, udev->serial,
+			sizeof(dev->mdev.serial));
+	strcpy(dev->mdev.bus_info, udev->devpath);
+	dev->mdev.hw_revision = le16_to_cpu(udev->descriptor.bcdDevice);
+	dev->mdev.driver_version = DRIVER_VERSION_NUMBER;
+	if (media_device_register(&dev->mdev) < 0)
+		goto error;
+
+	dev->vdev.mdev = &dev->mdev;
+#endif
+	if (v4l2_device_register(&intf->dev, &dev->vdev) < 0)
+		goto error;
+
 	/* Initialize controls. */
 	if (uvc_ctrl_init_device(dev) < 0)
 		goto error;
@@ -1880,7 +1874,7 @@ static int uvc_probe(struct usb_interface *intf,
 	if (uvc_scan_device(dev) < 0)
 		goto error;
 
-	/* Register video devices. */
+	/* Register video device nodes. */
 	if (uvc_register_chains(dev) < 0)
 		goto error;
 
@@ -1966,7 +1960,7 @@ static int __uvc_resume(struct usb_interface *intf, int reset)
 
 	list_for_each_entry(stream, &dev->streams, list) {
 		if (stream->intf == intf)
-			return uvc_video_resume(stream);
+			return uvc_video_resume(stream, reset);
 	}
 
 	uvc_trace(UVC_TRACE_SUSPEND, "Resume: video streaming USB interface "
@@ -1979,12 +1973,10 @@ static int uvc_resume(struct usb_interface *intf)
 	return __uvc_resume(intf, 0);
 }
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 22)
 static int uvc_reset_resume(struct usb_interface *intf)
 {
 	return __uvc_resume(intf, 1);
 }
-#endif
 
 /* ------------------------------------------------------------------------
  * Module parameters
@@ -2147,6 +2139,15 @@ static struct usb_device_id uvc_ids[] = {
 	  .bInterfaceSubClass	= 1,
 	  .bInterfaceProtocol	= 0,
 	  .driver_info		= UVC_QUIRK_STREAM_NO_FID },
+	/* Hercules Classic Silver */
+	{ .match_flags		= USB_DEVICE_ID_MATCH_DEVICE
+				| USB_DEVICE_ID_MATCH_INT_INFO,
+	  .idVendor		= 0x06f8,
+	  .idProduct		= 0x300c,
+	  .bInterfaceClass	= USB_CLASS_VIDEO,
+	  .bInterfaceSubClass	= 1,
+	  .bInterfaceProtocol	= 0,
+	  .driver_info		= UVC_QUIRK_FIX_BANDWIDTH },
 	/* ViMicro Vega */
 	{ .match_flags		= USB_DEVICE_ID_MATCH_DEVICE
 				| USB_DEVICE_ID_MATCH_INT_INFO,
@@ -2193,6 +2194,15 @@ static struct usb_device_id uvc_ids[] = {
 	  .bInterfaceSubClass	= 1,
 	  .bInterfaceProtocol	= 0,
 	  .driver_info		= UVC_QUIRK_STREAM_NO_FID },
+	/* JMicron USB2.0 XGA WebCam */
+	{ .match_flags		= USB_DEVICE_ID_MATCH_DEVICE
+				| USB_DEVICE_ID_MATCH_INT_INFO,
+	  .idVendor		= 0x152d,
+	  .idProduct		= 0x0310,
+	  .bInterfaceClass	= USB_CLASS_VIDEO,
+	  .bInterfaceSubClass	= 1,
+	  .bInterfaceProtocol	= 0,
+	  .driver_info		= UVC_QUIRK_PROBE_MINMAX },
 	/* Syntek (HP Spartan) */
 	{ .match_flags		= USB_DEVICE_ID_MATCH_DEVICE
 				| USB_DEVICE_ID_MATCH_INT_INFO,
@@ -2355,20 +2365,16 @@ struct uvc_driver uvc_driver = {
 		.disconnect	= uvc_disconnect,
 		.suspend	= uvc_suspend,
 		.resume		= uvc_resume,
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 22)
 		.reset_resume	= uvc_reset_resume,
-#endif	
 		.id_table	= uvc_ids,
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 18)
 		.supports_autosuspend = 1,
-#endif
 	},
 };
 
 static int __init uvc_init(void)
 {
 	int result;
-printk("%s amlogic\n", __func__);
+
 	result = usb_register(&uvc_driver.driver);
 	if (result == 0)
 		printk(KERN_INFO DRIVER_DESC " (" DRIVER_VERSION ")\n");
